@@ -1,13 +1,14 @@
 import asyncio
 import logging
 import os
+import re
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Literal, Optional
 
 from dotenv import load_dotenv
-from fastapi import (APIRouter, Depends, FastAPI, File, HTTPException, Query, UploadFile, WebSocket,
+from fastapi import (APIRouter, Depends, FastAPI, File, HTTPException, Query, Request, UploadFile, WebSocket,
                      WebSocketDisconnect)
 from fastapi.responses import FileResponse
 from motor.motor_asyncio import AsyncIOMotorClient
@@ -35,7 +36,7 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(level
 
 CACHE_DIR = Path("/tmp/creatorlive_videos")
 CACHE_DIR.mkdir(exist_ok=True)
-MAX_UPLOAD = 1024 * 1024 * 1024
+MAX_UPLOAD = 5 * 1024 * 1024 * 1024
 DEFAULT_URLS = {"youtube": "rtmp://a.rtmp.youtube.com/live2", "facebook": "rtmps://live-api-s.facebook.com:443/rtmp"}
 
 
@@ -99,6 +100,49 @@ async def enabled_outputs(user_id: str):
     return outs
 
 
+CHUNK_MAX = 30 * 1024 * 1024
+
+
+class UploadInit(BaseModel):
+    filename: str
+    size: int
+    content_type: str
+
+
+class VideoPatch(BaseModel):
+    format: Literal["long", "short"]
+
+
+async def probe(local: Path) -> dict:
+    proc = await asyncio.create_subprocess_exec(streamer.FFMPEG, "-hide_banner", "-i", str(local),
+                                                stdout=asyncio.subprocess.DEVNULL, stderr=asyncio.subprocess.PIPE)
+    _, err = await proc.communicate()
+    text = err.decode(errors="ignore")
+    info = {"duration": None, "width": None, "height": None}
+    if m := re.search(r"Duration: (\d+):(\d+):(\d+\.?\d*)", text):
+        info["duration"] = int(m[1]) * 3600 + int(m[2]) * 60 + float(m[3])
+    if m := re.search(r"Video: .*?, (\d{2,5})x(\d{2,5})", text):
+        w, h = int(m[1]), int(m[2])
+        if re.search(r"rotation of -?90|rotate\s*:\s*-?(90|270)", text):
+            w, h = h, w
+        info["width"], info["height"] = w, h
+    return info
+
+
+def detect_format(info: dict) -> str:
+    vertical = info["width"] and info["height"] and info["height"] > info["width"]
+    short = info["duration"] is not None and info["duration"] <= 180
+    return "short" if vertical or short else "long"
+
+
+async def save_video_doc(user_id, vid, title, content_type, size, local, storage_fields):
+    info = await probe(local)
+    doc = {"id": vid, "user_id": user_id, "title": title, "content_type": content_type, "size": size,
+           **info, "format": detect_format(info), "is_deleted": False, "created_at": now(), **storage_fields}
+    await db.videos.insert_one(doc.copy())
+    return {k: v for k, v in doc.items() if k not in ("storage_path", "storage_parts", "user_id")}
+
+
 @api.post("/videos")
 async def upload_video(file: UploadFile = File(...), user=Depends(require_user)):
     if not (file.content_type or "").startswith("video/"):
@@ -113,21 +157,79 @@ async def upload_video(file: UploadFile = File(...), user=Depends(require_user))
             if size > MAX_UPLOAD:
                 f.close()
                 local.unlink(missing_ok=True)
-                raise HTTPException(413, "Video must be under 1 GB")
+                raise HTTPException(413, "Video must be under 5 GB")
             await run_in_threadpool(f.write, chunk)
     path = f"{storage.APP_NAME}/videos/{user['user_id']}/{vid}.{ext}"
     result = await run_in_threadpool(storage.put_file, path, str(local), file.content_type)
-    doc = {"id": vid, "user_id": user["user_id"], "storage_path": result["path"], "title": file.filename,
-           "content_type": file.content_type, "size": size, "is_deleted": False, "created_at": now()}
-    await db.videos.insert_one(doc.copy())
-    doc.pop("storage_path")
+    return await save_video_doc(user["user_id"], vid, file.filename, file.content_type, size, local,
+                                {"storage_path": result["path"]})
+
+
+@api.post("/uploads")
+async def upload_init(body: UploadInit, user=Depends(require_user)):
+    if not body.content_type.startswith("video/"):
+        raise HTTPException(400, "Only video files are allowed")
+    if body.size > MAX_UPLOAD:
+        raise HTTPException(413, "Video must be under 5 GB")
+    ext = body.filename.rsplit(".", 1)[-1].lower() if "." in body.filename else "mp4"
+    up = {"id": str(uuid.uuid4()), "user_id": user["user_id"], "filename": body.filename, "ext": ext,
+          "content_type": body.content_type, "size": body.size, "received": 0, "parts": [], "created_at": now()}
+    await db.uploads.insert_one(up.copy())
+    return {"upload_id": up["id"], "chunk_size": 20 * 1024 * 1024}
+
+
+@api.put("/uploads/{upload_id}/chunks/{index}")
+async def upload_chunk(upload_id: str, index: int, request: Request, user=Depends(require_user)):
+    up = await db.uploads.find_one({"id": upload_id, "user_id": user["user_id"]})
+    if not up:
+        raise HTTPException(404, "Upload not found")
+    if index < len(up["parts"]):
+        return {"received": up["received"]}  # already stored (client retry)
+    if index != len(up["parts"]):
+        raise HTTPException(409, f"Expected chunk {len(up['parts'])}")
+    data = await request.body()
+    if not data or len(data) > CHUNK_MAX or up["received"] + len(data) > up["size"]:
+        raise HTTPException(400, "Invalid chunk")
+    path = f"{storage.APP_NAME}/videos/{user['user_id']}/{upload_id}/part{index:05d}"
+    result = await run_in_threadpool(storage.put_object, path, data, "application/octet-stream")
+    local = CACHE_DIR / f"{upload_id}.{up['ext']}"
+    with open(local, "ab") as f:
+        await run_in_threadpool(f.write, data)
+    received = up["received"] + len(data)
+    await db.uploads.update_one({"id": upload_id}, {"$push": {"parts": result["path"]}, "$set": {"received": received}})
+    return {"received": received}
+
+
+@api.post("/uploads/{upload_id}/complete")
+async def upload_complete(upload_id: str, user=Depends(require_user)):
+    up = await db.uploads.find_one({"id": upload_id, "user_id": user["user_id"]})
+    if not up:
+        raise HTTPException(404, "Upload not found")
+    if up["received"] != up["size"]:
+        raise HTTPException(400, "Upload is incomplete")
+    local = CACHE_DIR / f"{upload_id}.{up['ext']}"
+    if not local.exists() or local.stat().st_size != up["size"]:
+        local.unlink(missing_ok=True)
+        await run_in_threadpool(storage.download_parts, up["parts"], str(local))
+    doc = await save_video_doc(user["user_id"], upload_id, up["filename"], up["content_type"], up["size"], local,
+                               {"storage_parts": up["parts"], "ext": up["ext"]})
+    await db.uploads.delete_one({"id": upload_id})
     return doc
+
+
+@api.patch("/videos/{vid}")
+async def update_video(vid: str, body: VideoPatch, user=Depends(require_user)):
+    r = await db.videos.update_one({"id": vid, "user_id": user["user_id"], "is_deleted": False},
+                                   {"$set": {"format": body.format}})
+    if r.matched_count == 0:
+        raise HTTPException(404, "Not found")
+    return {"id": vid, "format": body.format}
 
 
 @api.get("/videos")
 async def list_videos(user=Depends(require_user)):
     return await db.videos.find({"user_id": user["user_id"], "is_deleted": False},
-                                {"_id": 0, "storage_path": 0}).sort("created_at", -1).to_list(500)
+                                {"_id": 0, "storage_path": 0, "storage_parts": 0, "user_id": 0}).sort("created_at", -1).to_list(500)
 
 
 @api.delete("/videos/{vid}")
@@ -140,7 +242,8 @@ async def delete_video(vid: str, user=Depends(require_user)):
 
 
 @api.get("/videos/{vid}/file")
-async def video_file(vid: str, user=Depends(require_user)):
+async def video_file(vid: str, request: Request, auth: Optional[str] = Query(None)):
+    user = {"user_id": verify_session_token(auth)["sub"]} if auth else require_user(request)
     rec = await db.videos.find_one({"id": vid, "user_id": user["user_id"], "is_deleted": False})
     if not rec:
         raise HTTPException(404, "Not found")
@@ -149,9 +252,13 @@ async def video_file(vid: str, user=Depends(require_user)):
 
 
 async def cached_file(rec) -> Path:
-    local = CACHE_DIR / f"{rec['id']}.{rec['storage_path'].rsplit('.', 1)[-1]}"
+    ext = rec.get("ext") or rec["storage_path"].rsplit(".", 1)[-1]
+    local = CACHE_DIR / f"{rec['id']}.{ext}"
     if not local.exists():
-        await run_in_threadpool(storage.download_to_file, rec["storage_path"], str(local))
+        if rec.get("storage_parts"):
+            await run_in_threadpool(storage.download_parts, rec["storage_parts"], str(local))
+        else:
+            await run_in_threadpool(storage.download_to_file, rec["storage_path"], str(local))
     return local
 
 

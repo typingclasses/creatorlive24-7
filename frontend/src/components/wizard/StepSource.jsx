@@ -5,6 +5,7 @@ import { useStudio } from "@/context/StudioContext";
 import { useApi, errMsg } from "@/lib/api";
 import { SourceToolbar } from "@/components/wizard/SourceToolbar";
 import { LibraryPicker } from "@/components/wizard/LibraryPicker";
+import { uploadVideo } from "@/lib/upload";
 
 const Row = ({ active, icon: I, color, title, sub, onClick, id, children }) => (
   <div className={`min-w-0 border rounded-2xl transition-colors ${active ? "border-[#E50914] ring-1 ring-[#E50914]" : "border-slate-200 hover:border-slate-300"}`}>
@@ -21,7 +22,8 @@ export default function StepSource({ onBack, onNext }) {
   const { source, setSource, settings } = useStudio();
   const api = useApi();
   const fileRef = useRef(null);
-  const [uploading, setUploading] = useState(false);
+  const [progress, setProgress] = useState(null);
+  const uploading = progress !== null;
   const [picker, setPicker] = useState(false);
   const h = settings.quality === "1080p" ? 1080 : 720;
 
@@ -42,14 +44,13 @@ export default function StepSource({ onBack, onNext }) {
   };
   const upload = async (file) => {
     if (!file) return;
-    setUploading(true);
+    setProgress(0);
     try {
-      const fd = new FormData(); fd.append("file", file);
-      const v = await api.post("/videos", fd);
+      const v = await uploadVideo(api, file, setProgress);
       setSource({ type: "video", video: v });
       toast.success("Video uploaded to your library");
     } catch (e) { toast.error(errMsg(e)); }
-    finally { setUploading(false); fileRef.current.value = ""; }
+    finally { setProgress(null); fileRef.current.value = ""; }
   };
   const next = () => (source ? onNext() : toast.error("Choose a stream source first"));
 
@@ -65,7 +66,7 @@ export default function StepSource({ onBack, onNext }) {
           <div className="flex flex-wrap justify-between gap-2 px-5 pb-4 pt-3 border-t border-slate-100 mx-5">
             <input ref={fileRef} type="file" accept="video/*" hidden onChange={(e) => upload(e.target.files[0])} data-testid="video-file-input" />
             <button onClick={() => fileRef.current.click()} disabled={uploading} data-testid="choose-video-device-button" className="flex items-center gap-1.5 bg-[#7C3AED] hover:bg-[#6D28D9] text-white text-xs font-semibold px-4 py-2 rounded-full transition-colors disabled:opacity-60">
-              {uploading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Upload className="w-3.5 h-3.5" />} {uploading ? "Uploading…" : "Choose Video from Device"}
+              {uploading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Upload className="w-3.5 h-3.5" />} {uploading ? `Uploading… ${progress}%` : "Choose Video from Device"}
             </button>
             <button onClick={() => setPicker(true)} data-testid="open-video-studio-button" className="bg-[#E50914] hover:bg-[#C80711] text-white text-xs font-semibold px-4 py-2 rounded-full transition-colors">Open Video Studio ›</button>
           </div>

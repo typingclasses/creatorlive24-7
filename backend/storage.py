@@ -54,6 +54,18 @@ def download_to_file(path: str, dest: str):
             return
 
 
+def download_parts(paths, dest: str):
+    with open(dest + ".part", "wb") as f:
+        for p in paths:
+            for attempt in range(2):
+                resp = requests.get(f"{STORAGE_URL}/objects/{p}", headers={"X-Storage-Key": init_storage(force=attempt > 0)}, timeout=600)
+                if resp.status_code != 404:
+                    break
+            resp.raise_for_status()
+            f.write(resp.content)
+    os.replace(dest + ".part", dest)
+
+
 def get_object(path: str):
     resp = requests.get(f"{STORAGE_URL}/objects/{path}", headers={"X-Storage-Key": init_storage()}, timeout=600)
     resp.raise_for_status()

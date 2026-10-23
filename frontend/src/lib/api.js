@@ -16,13 +16,15 @@ export function useApi() {
   const { getToken } = useAuth();
   const req = useCallback(async (method, url, data, extra = {}) => {
     const token = await getToken();
-    const res = await axios({ method, url: `${API}${url}`, data, headers: { Authorization: `Bearer ${token}` }, ...extra });
+    const { headers, ...rest } = extra;
+    const res = await axios({ method, url: `${API}${url}`, data, headers: { Authorization: `Bearer ${token}`, ...headers }, ...rest });
     return res.data;
   }, [getToken]);
   return useMemo(() => ({
     get: (u, x) => req("get", u, undefined, x),
     post: (u, d, x) => req("post", u, d, x),
-    put: (u, d) => req("put", u, d),
+    put: (u, d, x) => req("put", u, d, x),
+    patch: (u, d) => req("patch", u, d),
     del: (u) => req("delete", u),
     getToken,
   }), [req, getToken]);
