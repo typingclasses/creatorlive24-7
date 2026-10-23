@@ -1,0 +1,31 @@
+import { useCallback, useMemo } from "react";
+import axios from "axios";
+import { useAuth } from "@clerk/react";
+
+export const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
+export const API = `${BACKEND_URL}/api`;
+
+export const errMsg = (e) => e?.response?.data?.detail || e?.message || "Something went wrong";
+
+export function useApi() {
+  const { getToken } = useAuth();
+  const req = useCallback(async (method, url, data, extra = {}) => {
+    const token = await getToken();
+    const res = await axios({ method, url: `${API}${url}`, data, headers: { Authorization: `Bearer ${token}` }, ...extra });
+    return res.data;
+  }, [getToken]);
+  return useMemo(() => ({
+    get: (u, x) => req("get", u, undefined, x),
+    post: (u, d, x) => req("post", u, d, x),
+    put: (u, d) => req("put", u, d),
+    del: (u) => req("delete", u),
+    getToken,
+  }), [req, getToken]);
+}
+
+export const formatSize = (b) => (b > 1e9 ? `${(b / 1e9).toFixed(2)} GB` : `${(b / 1e6).toFixed(1)} MB`);
+
+export const formatDuration = (ms) => {
+  const s = Math.max(0, Math.floor(ms / 1000));
+  return [Math.floor(s / 3600), Math.floor((s % 3600) / 60), s % 60].map((n) => String(n).padStart(2, "0")).join(":");
+};

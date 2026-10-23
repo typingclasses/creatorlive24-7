@@ -1,0 +1,143 @@
+{
+  "project_info": {
+    "name": "CreatorLive24/7",
+    "tagline": "Your Content. Always On. Go Live Faster. Stream Smarter. Grow 24/7.",
+    "location": "Tripoliya, Patna, Bihar, India",
+    "platforms": ["YouTube", "Facebook"],
+    "app_type": "Hybrid Fullstack Live Streaming SaaS App",
+    "auth_method": "Google Email ID Authentication"
+  },
+  "design_archetype": {
+    "name": "The High-Energy Broadcast Studio (Swiss & Performance Hybrid)",
+    "mode": "Light/Dark Hybrid with Red & Dark Blue Primary Accents",
+    "vibe": "Professional broadcast studio meets modern cloud SaaS. Crisp white cards, energetic YouTube-red accents, deep obsidian/slate backgrounds, high-contrast metrics, and dynamic control panels.",
+    "anti_patterns_forbidden": [
+      "Pure #000000 flat black backgrounds without subtle blue/slate tints",
+      "Generic centered layouts with centered text everywhere",
+      "Using default Inter for section headlines",
+      "Placeholder image URLs from external dummy generators",
+      "Unstyled raw browser select boxes or date pickers"
+    ]
+  },
+  "typography": {
+    "font_family_heading": "Outfit, Clash Display, system-ui, sans-serif",
+    "font_family_body": "Plus Jakarta Sans, -apple-system, BlinkMacSystemFont, sans-serif",
+    "font_family_mono": "JetBrains Mono, Source Code Pro, monospace",
+    "google_fonts_import": "https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Outfit:wght@500;700;800;900&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap",
+    "scale": {
+      "h1": "text-4xl sm:text-5xl lg:text-6xl font-extrabold tracking-tight leading-none",
+      "h2": "text-2xl sm:text-3xl lg:text-4xl font-bold tracking-tight",
+      "h3": "text-xl sm:text-2xl font-semibold tracking-tight",
+      "h4": "text-lg sm:text-xl font-semibold",
+      "body": "text-base leading-relaxed text-slate-600 dark:text-slate-300",
+      "caption": "text-xs font-medium uppercase tracking-widest text-slate-400 dark:text-slate-500",
+      "mono_data": "font-mono text-sm tracking-wide"
+    }
+  },
+  "colors": {
+    "primary_red": "#E50914",
+    "primary_red_hover": "#C80711",
+    "deep_blue": "#0B132B",
+    "brand_blue": "#1C2541",
+    "accent_yellow": "#FFB703",
+    "accent_purple": "#7C3AED",
+    "accent_purple_hover": "#6D28D9",
+    "neutral_light_bg": "#F8FAFC",
+    "card_bg_light": "#FFFFFF",
+    "card_border_light": "#E2E8F0",
+    "dark_bg": "#0B0F19",
+    "dark_card_bg": "#111827",
+    "dark_card_border": "#1F2937",
+    "live_indicator": "#EF4444",
+    "success_green": "#10B981"
+  },
+  "layout_and_spacing": {
+    "spacing_philosophy": "Generous spacing philosophy (2-3x default padding). Cards must have minimum p-6 to p-8 padding to avoid collisions.",
+    "container": "max-w-7xl mx-auto px-4 sm:px-6 lg:px-8",
+    "stepper_card_layout": "Max-width centered wizard card (max-w-4xl) with crisp top navigation pills: 1. YouTube & Key | 2. Stream Source | 3. Go Live Studio. Active pill highlighted in solid Red (#E50914) with white bold text.",
+    "bottom_toolbar_grid": "Horizontal bar featuring action icon pills: Tips, Landscape, Video quality FHD, FPS 60, Overlay, Teams, Replay, More, alongside a prominent Red 'Next / Go Live' action button.",
+    "grid_bento": "grid grid-cols-1 md:grid-cols-12 gap-6"
+  },
+  "components_structure": {
+    "Header": {
+      "path": "src/components/Header.js",
+      "details": "Sticky header with visual crystal glassmorphism (backdrop-blur-md bg-white/80 dark:bg-slate-900/80 border-b border-slate-200 dark:border-slate-800 z-50). Displays CreatorLive24/7 logo with animated Red LIVE badge, main nav links (Wizard, Studio, Video Library, Monetization), Google Email Login button / User menu, and Theme Switcher."
+    },
+    "HeroSection": {
+      "path": "src/components/HeroSection.js",
+      "details": "High-impact banner inspired by screenshot 2. Banner: 'CreatorLive24/7 — Your Content. Always On.' Blue/white brand theme, red LIVE badge, yellow accent highlight. Tagline: 'Go Live Faster. Stream Smarter. Grow 24/7.'. Quick launch CTA buttons to YouTube & Facebook live studio wizard."
+    },
+    "LiveSetupWizard": {
+      "path": "src/components/LiveSetupWizard.js",
+      "details": "Interactive 3-step live streaming setup wizard adhering to screenshot 1:\n- Step 1: YouTube & Facebook RTMP Key setup (Platform selector, Stream URL, Stream Key toggle visibility, save destination settings).\n- Step 2: Stream Source configuration (Options: Stream Camera preview, Screen Broadcast modal, Video file selector with 'Choose Video from Device' purple button and 'Open Video Studio' red button; Bottom toolbar with Tips, Landscape toggle, Quality FHD 1080p, 60 FPS indicator, Watermark Overlay toggle, Teams invite, Replay loop mode, More options, and big Red Next button).\n- Step 3: Go Live Studio (Full live broadcast console with video preview, real-time FPS/bitrate meter, live timer 00:00:00, live chat feed simulation, platform sync status badge for YouTube & Facebook, Stop/Go Live toggle button)."
+    },
+    "VideoLibrary": {
+      "path": "src/components/VideoLibrary.js",
+      "details": "Cloud storage video library for 24/7 stream loops. Features file dropzone upload, clip preview cards, resolution badge, cloud storage quota indicator, 24/7 Auto-Loop toggle switch, and stream shortcut to immediately use clip in Step 2 of setup wizard."
+    },
+    "MonetizationAndFeatures": {
+      "path": "src/components/MonetizationAndFeatures.js",
+      "details": "Feature breakdown highlighting Live Streaming, Video Library, 24/7 Loop Streaming, and Monetization Guide (Ad revenue, Super Chats, Sponsorships). Includes platform integration badges for YouTube and Facebook."
+    },
+    "Footer": {
+      "path": "src/components/Footer.js",
+      "details": "Footer featuring location address: 'Tripoliya, Patna, Bihar, India', platform badges (YouTube, Facebook), quick navigation links, and the dark-blue bottom feature strip: 'Fast Setup / Secure & Reliable / Build Your Audience / Monetize Smarter'."
+    },
+    "GoogleAuthModal": {
+      "path": "src/components/GoogleAuthModal.js",
+      "details": "Modal simulating Google Email ID Single Sign-On flow with profile avatar display and account session management."
+    }
+  },
+  "image_urls": [
+    {
+      "category": "live_studio_streamer",
+      "url": "https://images.unsplash.com/photo-1598550480917-1c485268676e?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1NTJ8MHwxfHNlYXJjaHw0fHxsaXZlJTIwc3RyZWFtaW5nJTIwY3JlYXRvciUyMHN0dWRpbyUyMHN0cmVhbWVyJTIwY2FtZXJhfGVufDB8fHx8MTc5Mjc4MDEwNXww&ixlib=rb-4.1.0&q=85",
+      "description": "Creator desk setup with professional streaming microphone and dual monitor setup"
+    },
+    {
+      "category": "camera_setup",
+      "url": "https://images.unsplash.com/photo-1594394489103-e4aa367d46da?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1NTJ8MHwxfHNlYXJjaHwzfHxsaXZlJTIwc3RyZWFtaW5nJTIwY3JlYXRvciUyMHN0dWRpbyUyMHN0cmVhbWVyJTIwY2FtZXJhfGVufDB8fHx8MTc5Mjc4MDEwNXww&ixlib=rb-4.1.0&q=85",
+      "description": "DSLR live camera on tripod recording video broadcast studio"
+    },
+    {
+      "category": "streamer_portrait",
+      "url": "https://images.pexels.com/photos/7514831/pexels-photo-7514831.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
+      "description": "Female creator streaming live online with ring light and studio setup"
+    },
+    {
+      "category": "mobile_streamer",
+      "url": "https://images.pexels.com/photos/8371393/pexels-photo-8371393.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
+      "description": "Creator configuring live stream on smartphone tripod setup"
+    }
+  ],
+  "testing_attributes": {
+    "rule": "Every interactive element (button, input, tab, link, toggle, modal trigger) MUST include a unique data-testid attribute in kebab-case format.",
+    "examples": [
+      "data-testid=\"google-login-button\"",
+      "data-testid=\"wizard-step-1-tab\"",
+      "data-testid=\"wizard-step-2-tab\"",
+      "data-testid=\"wizard-step-3-tab\"",
+      "data-testid=\"youtube-stream-key-input\"",
+      "data-testid=\"facebook-stream-key-input\"",
+      "data-testid=\"select-source-camera-button\"",
+      "data-testid=\"select-source-screen-button\"",
+      "data-testid=\"choose-video-device-button\"",
+      "data-testid=\"open-video-studio-button\"",
+      "data-testid=\"wizard-next-button\"",
+      "data-testid=\"go-live-start-button\"",
+      "data-testid=\"end-stream-button\"",
+      "data-testid=\"upload-video-dropzone\"",
+      "data-testid=\"loop-247-toggle\""
+    ]
+  },
+  "UNIVERSAL GUIDELINES FOR MAIN AGENT": [
+    "Use JavaScript (.js / .jsx) components, matching the existing project structure.",
+    "Never default to plain Inter font for headings; import Outfit / Clash Display and JetBrains Mono.",
+    "Strictly follow the 3-step wizard structure from Screenshot 1: 1. YouTube & Key | 2. Stream Source | 3. Go Live Studio with red active pill pills style.",
+    "Provide interactive mock capabilities for video stream preview, camera switching, screen broadcast simulation, RTMP key validation, video file selection, and fake live timer.",
+    "Include Google Email ID sign-in state handling in state management / context so creators can toggle logged-in states.",
+    "Ensure Tripoliya, Patna, Bihar, India location details are accurately reflected in footer and company info cards.",
+    "All buttons must have explicit hover states with text color defined (e.g. hover:bg-red-700 hover:text-white).",
+    "Add data-testid attributes to all interactive and key data display elements."
+  ]
+}
