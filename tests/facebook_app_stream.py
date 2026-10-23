@@ -21,7 +21,7 @@ print("start", r.status_code, r.text.replace(KEY, "***")[:300])
 for _ in range(int(os.environ.get("SECS", "150")) // 15):
     time.sleep(15)
     st = requests.get(f"{API}/streams/status", headers=H).json()
-    print("status", st.get("live"), str(st.get("log") or st.get("last_error"))[-200:].replace(KEY, "***"), flush=True)
+    print("status", st.get("live"), st.get("platforms"), st.get("failed_platforms"), str(st.get("log") or st.get("last_error"))[-200:].replace(KEY, "***"), flush=True)
     if not st.get("live"):
         break
 print("stop", requests.post(f"{API}/streams/stop", headers=H).json())

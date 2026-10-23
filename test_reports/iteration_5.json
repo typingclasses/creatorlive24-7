@@ -1,0 +1,31 @@
+{
+  "summary": "Retested the fixes for the iteration_4 issues. Everything passed. (a) Key masking: with a valid YouTube key plus the invalid Facebook key 'FB-invalid-123' over the PUBLIC URL, start returned 200 in 3.1s. Status at t+5/10/15/20s showed live=True, platforms ['youtube'], failed_platforms ['facebook']. Log lines show 'rtmp://127.0.0.1:<port>/rtmp/***', and neither key appeared in any status response (0 leaking polls). (b) UI with the same setup: signed in via Clerk ticket, Library > Stream > Go Live. The LIVE badge appeared and data-testid='studio-failed-platforms' said 'Not live on facebook: the platform refused the stream key. Check it in Step 1.' End Stream worked and the warning went away. (c) Real Facebook stream alone (SECS=30, run twice): start 200, platforms ['facebook'], failed_platforms [] at start and on every poll, live throughout, no ffmpeg log lines, stop OK. (d) pytest /app/backend/tests: 24/24 passed. Destinations were cleared after every run, and no tee ffmpeg processes were left running.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Step 3 Go Live Studio", "issues": [
+        "The failed-platform warning uses the raw lowercase id ('Not live on facebook'). It should show 'Facebook'.",
+        "The raw ffmpeg line ('[tee @ 0x...] Slave muxer #1 failed: Input/output error...') is shown to the user under studio-encoder-log. It is noisy and technical.",
+        "The header chips still show both YouTube and Facebook with no failed state on the Facebook chip."
+      ]}
+    ]
+  },
+  "test_report_links": ["/app/tests/partial_failure_stream.py", "/app/tests/ui_prep_partial.py", "/app/tests/facebook_app_stream.py", "/app/backend/tests/test_creatorlive_api.py", "/app/test_reports/pytest/pytest_results.xml"],
+  "action_items": [
+    "Optional polish: capitalize the platform names in studio-failed-platforms, hide or simplify the raw ffmpeg log line, and mark failed platforms on the header chips."
+  ],
+  "critical_code_review_comments": [
+    "streamer._drain masks keys with exact string replace per output. That is fine for the current URL format, but it would not catch URL-encoded keys.",
+    "failed-slave detection depends on the ffmpeg tee message text 'Slave muxer #N failed' and on tee indices matching the order of session.outputs. That is correct today, but it is fragile across ffmpeg versions.",
+    "Carried over: relay.handle swallows upstream errors silently; friendly_error has a broad 'Connection' match; the stream key is visible in the ffmpeg argv of the relay path only (local URL)."
+  ],
+  "updated_files": ["/app/tests/partial_failure_stream.py (new)", "/app/tests/ui_prep_partial.py (new)", "/app/tests/facebook_app_stream.py (status print now includes platforms/failed_platforms)"],
+  "success_rate": {"backend": "100%", "frontend": "100%"},
+  "test_credentials": "Test user user_3L6hhploCiep0mzXWVPKBKQmMP8 (creator+clerk_test@example.com) from /app/memory/test_credentials.md. The keys were read from backend/.env by the scripts and never printed.",
+  "seed_data_creation": "None. New history entries for the test user: partial-failure API stream, 2x Facebook stream, UI partial-failure stream, pytest. Destinations were reset to disabled/empty.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Run from /app/backend. Partial failure (public URL): SECS=20 python /app/tests/partial_failure_stream.py (prints RESULT True). UI prep: python /app/tests/ui_prep_partial.py (sets YT valid + FB invalid, prints VID/TICKET). Afterwards run 'python /app/tests/ui_prep_partial.py clear'. Real FB: SECS=30 python /app/tests/facebook_app_stream.py."
+}

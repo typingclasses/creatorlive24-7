@@ -21,6 +21,8 @@ User choices: real streaming to YouTube/Facebook; videos saved in cloud library;
 - Fixed: bundled ffmpeg couldn't resolve hostnames -> added local DNS/TLS relay (backend/relay.py); real YouTube stream verified with user's key
 - Friendly 422 errors for rejected keys, failed starts not logged in history
 
+- Facebook rtmps verified live with user key; YouTube+Facebook together verified; failed platform warning; stream keys masked in logs
+
 ## Backlog
 - P1: Scheduled 24/7 playlists (multiple videos in rotation), auto-restart if platform connection drops
 - P1: Video seek/Range support in preview, thumbnails

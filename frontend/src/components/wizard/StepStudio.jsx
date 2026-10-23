@@ -72,9 +72,8 @@ export default function StepStudio({ onBack }) {
           <div key={k} className="bg-slate-50 rounded-xl py-3"><p className="text-[10px] uppercase tracking-widest text-slate-400">{k}</p><p className="font-mono text-sm truncate px-2" data-testid={`studio-stat-${k.toLowerCase()}`}>{v}</p></div>
         ))}
       </div>
-      {status.live && status.failed_platforms?.length > 0 && <p className="mt-3 text-xs text-[#E50914] bg-red-50 rounded-lg p-3" data-testid="studio-failed-platforms">Not live on {status.failed_platforms.join(", ")}: the platform refused the stream key. Check it in Step 1.</p>}
+      {status.live && status.failed_platforms?.length > 0 && <p className="mt-3 text-xs text-[#E50914] bg-red-50 rounded-lg p-3" data-testid="studio-failed-platforms">Not live on {status.failed_platforms.map((p) => p[0].toUpperCase() + p.slice(1)).join(", ")}: the platform refused the stream key. Check it in Step 1.</p>}
       {!status.live && status.last_error && <p className="mt-3 text-xs text-[#E50914] bg-red-50 rounded-lg p-3" data-testid="studio-last-error">Last stream stopped: {status.last_error}</p>}
-      {status.log?.length > 0 && status.live && <p className="mt-3 text-[11px] font-mono text-amber-600 truncate" data-testid="studio-encoder-log">{status.log[status.log.length - 1]}</p>}
       {status.live ? (
         <button onClick={endStream} disabled={busy} data-testid="end-stream-button" className="mt-6 w-full bg-[#0B132B] hover:bg-black text-white font-semibold py-4 rounded-2xl flex items-center justify-center gap-2 transition-colors">
           {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Square className="w-4 h-4" />} End Stream
