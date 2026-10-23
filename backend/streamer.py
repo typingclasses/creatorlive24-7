@@ -4,6 +4,11 @@ from datetime import datetime, timezone
 
 import imageio_ffmpeg
 
+try:
+    from backend.relay import open_relay
+except ModuleNotFoundError:
+    from relay import open_relay
+
 FFMPEG = imageio_ffmpeg.get_ffmpeg_exe()
 QUALITY = {"720p": (720, "3000k"), "1080p": (1080, "4500k")}
 
@@ -19,15 +24,26 @@ class Session:
         self.log = collections.deque(maxlen=15)
         self.ended = False
         self.on_exit = None
+        self.relays = []
 
 
 sessions: dict = {}
 last_errors: dict = {}
 
 
-def build_tee(destinations):
-    urls = [f"[f=flv:onfail=ignore]{d['url'].rstrip('/')}/{d['key']}" for d in destinations]
+async def build_tee(session):
+    urls = []
+    for d in session.outputs:
+        local, server = await open_relay(f"{d['url'].rstrip('/')}/{d['key']}")
+        session.relays.append(server)
+        urls.append(f"[f=flv:onfail=ignore]{local}")
     return "|".join(urls)
+
+
+def close_relays(session):
+    for server in session.relays:
+        server.close()
+    session.relays = []
 
 
 def encode_args(quality: str, fps: int):
@@ -49,6 +65,7 @@ async def _drain(session: Session):
             break
         session.log.append(line.decode(errors="ignore").strip())
     await session.proc.wait()
+    close_relays(session)
     if not session.ended and sessions.get(session.user_id) is session:
         sessions.pop(session.user_id, None)
         last_errors[session.user_id] = " ".join(list(session.log)[-3:]) or "Stream ended"
@@ -59,7 +76,7 @@ async def _drain(session: Session):
 async def start_process(session: Session, input_args, quality, fps, stdin=False):
     args = [FFMPEG, "-hide_banner", "-loglevel", "warning", *input_args,
             "-map", "0:v:0", "-map", "0:a:0?", *encode_args(quality, fps),
-            "-f", "tee", build_tee(session.outputs)]
+            "-f", "tee", await build_tee(session)]
     session.proc = await asyncio.create_subprocess_exec(
         *args, stdin=asyncio.subprocess.PIPE if stdin else asyncio.subprocess.DEVNULL,
         stdout=asyncio.subprocess.DEVNULL, stderr=asyncio.subprocess.PIPE)
