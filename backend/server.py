@@ -1,5 +1,9 @@
 import asyncio
+import hashlib
+import hmac
 import logging
+import time
+from urllib.parse import urlencode
 import os
 import re
 import uuid
@@ -194,6 +198,7 @@ async def upload_chunk(upload_id: str, index: int, request: Request, user=Depend
     claimed = await db.uploads.find_one_and_update({"id": upload_id, "claimed": index, "parts": {"$size": index}},
                                                    {"$inc": {"claimed": 1}})
     if not claimed:
+        up = await db.uploads.find_one({"id": upload_id})
         raise HTTPException(409, "Chunk in progress, retry" if index < up.get("claimed", 0) else f"Expected chunk {len(up['parts'])}")
     try:
         path = f"{storage.APP_NAME}/videos/{user['user_id']}/{upload_id}/part{index:05d}"
@@ -251,9 +256,29 @@ async def delete_video(vid: str, user=Depends(require_user)):
     return {"ok": True}
 
 
+def _media_sig(vid: str, uid: str, exp: int) -> str:
+    key = hashlib.sha256(("media:" + os.environ["CLERK_SECRET_KEY"]).encode()).digest()
+    return hmac.new(key, f"{vid}:{uid}:{exp}".encode(), hashlib.sha256).hexdigest()
+
+
+@api.get("/videos/{vid}/play-url")
+async def play_url(vid: str, user=Depends(require_user)):
+    if not await db.videos.find_one({"id": vid, "user_id": user["user_id"], "is_deleted": False}, {"_id": 1}):
+        raise HTTPException(404, "Not found")
+    exp = int(time.time()) + 6 * 3600
+    qs = urlencode({"uid": user["user_id"], "exp": exp, "sig": _media_sig(vid, user["user_id"], exp)})
+    return {"url": f"/api/videos/{vid}/file?{qs}"}
+
+
 @api.get("/videos/{vid}/file")
-async def video_file(vid: str, request: Request, auth: Optional[str] = Query(None)):
-    user = {"user_id": verify_session_token(auth)["sub"]} if auth else require_user(request)
+async def video_file(vid: str, request: Request, auth: Optional[str] = Query(None), uid: Optional[str] = Query(None),
+                     exp: Optional[int] = Query(None), sig: Optional[str] = Query(None)):
+    if sig and uid and exp:
+        if exp < time.time() or not hmac.compare_digest(sig, _media_sig(vid, uid, exp)):
+            raise HTTPException(401, "Link expired")
+        user = {"user_id": uid}
+    else:
+        user = {"user_id": verify_session_token(auth)["sub"]} if auth else require_user(request)
     rec = await db.videos.find_one({"id": vid, "user_id": user["user_id"], "is_deleted": False})
     if not rec:
         raise HTTPException(404, "Not found")
@@ -261,7 +286,8 @@ async def video_file(vid: str, request: Request, auth: Optional[str] = Query(Non
     if not local.exists():
         prepare(rec)
         if rec.get("storage_parts"):
-            return StreamingResponse(storage.iter_parts(rec["storage_parts"]), media_type=rec["content_type"])
+            return StreamingResponse(storage.iter_parts(rec["storage_parts"]), media_type=rec["content_type"],
+                                     headers={"Content-Length": str(rec["size"])})
         local = await cached_file(rec)
     return ranged_file(local, rec["content_type"], request.headers.get("range"))
 

@@ -68,7 +68,10 @@ def download_parts(paths, dest: str):
 
 def iter_parts(paths):
     for p in paths:
-        resp = requests.get(f"{STORAGE_URL}/objects/{p}", headers={"X-Storage-Key": init_storage()}, timeout=600)
+        for attempt in range(2):
+            resp = requests.get(f"{STORAGE_URL}/objects/{p}", headers={"X-Storage-Key": init_storage(force=attempt > 0)}, timeout=600)
+            if resp.status_code != 404:
+                break
         resp.raise_for_status()
         yield resp.content
 

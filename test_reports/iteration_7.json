@@ -1,0 +1,36 @@
+{
+  "summary": "Re-tested the iteration_6 fixes. Backend: 40/40 pytest pass with xdist -n 2. That includes the new tests for concurrent same-index chunk PUTs, size=0 -> 422, Range requests (206/416) and rebuilding the cache from storage parts. The public-URL long upload script works: 183 MB long video (360s 1280x720 -> long) and a 20s vertical clip (-> short). UI: Library upload progress is smooth at byte level (0,7,44,48,56,64,71,80,87,89,91,99% for 47 MB). The preview dialog for a landscape short clip uses a 16:9 box (718x404), not 9:16. Seeking works while the Clerk token in the URL is still valid. One real bug found: the preview URL carries a ~60s Clerk session token, so seek or range requests made after it expires return 401.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "GET /api/videos/{id}/file (cache missing)", "issue": "When the local cache is missing it streams storage parts with 200 and ignores the Range header. It also sends no Content-Length. The first preview after a restart or cache eviction therefore can't seek or show progress until the cache is rebuilt. iter_parts also lacks the 404 storage-key refresh retry that download_parts has."},
+      {"endpoint": "PUT /api/uploads/{id}/chunks/{i}", "issue": "If a concurrent duplicate loses the claim, it gets 409 'Expected chunk N' with N equal to its own index. The 'up' document was read before the claim, so the 'Chunk in progress, retry' branch is never hit. Behaviour is still correct: no duplicate parts, the file matches byte for byte, and the client retries on 409. Only the message is misleading."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "Library PreviewDialog", "issue": "The video src is /videos/{id}/file?auth=<Clerk getToken()>. Clerk tokens expire after ~60s. In the browser, a seek ~75s after opening the preview sent Range bytes=3473408- and got 401. For large long-format videos (unbuffered regions), seeking or continued playback after ~1 minute will fail. Fix: issue a longer-lived signed media URL from the backend (e.g. GET /api/videos/{id}/play-url returning an HMAC token valid for hours, scoped to video_id and user_id), or refresh src on video 'error' while keeping currentTime.", "selector": "[data-testid='video-preview-dialog'] video", "priority": "HIGH"}
+    ],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": ["/app/backend/tests/test_chunked_upload.py", "/app/backend/tests/test_creatorlive_api.py", "/app/test_reports/pytest/pytest_results.xml", "/app/tests/chunk_upload_test.py"],
+  "action_items": [
+    "HIGH: Fix the preview media URL auth expiry (Clerk token in ?auth= expires after ~60s, so later seek/range requests return 401). Use a long-lived signed play token, or re-fetch the token and reset src on error.",
+    "MINOR: Honour Range, or redirect/wait briefly for the cache, when /file streams from storage parts. Add Content-Length (sum of part sizes = rec.size). Add the 404 key-refresh retry to iter_parts.",
+    "MINOR: In upload_chunk, re-read the claimed counter after a failed claim so concurrent duplicates get 'Chunk in progress, retry'."
+  ],
+  "critical_code_review_comments": [
+    "server.py video_file: the stream-from-parts path returns 200 without Accept-Ranges or Content-Length. Browsers can't seek and the length is unknown.",
+    "server.py prepare(): if the background download fails, the exception goes unretrieved; cached_file then surfaces it as a 500 with no friendly message.",
+    "Previous test failures (test_cache_rebuild_from_parts, test_range_request) were a test race, not an app bug or an xdist file regeneration problem. The cache is rebuilt in the background, so the immediate os.path.exists check failed, and the next range test then hit the parts stream (200). The test now polls up to 60s for the rebuilt cache and checks its bytes."
+  ],
+  "updated_files": ["/app/backend/tests/test_chunked_upload.py"],
+  "success_rate": {"backend": "100% (40/40)", "frontend": "90% (upload progress, format detection, dialog sizing, seek OK; seek after token expiry 401)"},
+  "test_credentials": "creator+clerk_test@example.com (Clerk dev, user_3L6hhploCiep0mzXWVPKBKQmMP8); UI sign-in via python /app/backend/tests/make_ticket.py <email> -> /sign-in?__clerk_ticket=<t> (single-use)",
+  "seed_data_creation": "Uploaded TEST_* videos via the UI and deleted them afterwards. long.mp4/short.mp4 from /app/tests/chunk_upload_test.py remain for the test user.",
+  "retest_needed": true,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Playwright Chromium can't decode H.264, and /tmp/TEST_clip.mp4 is yuv444p. Use VP9 WebM (/tmp/TEST_seek.webm 200s, /tmp/TEST_landshort.webm 10s) to verify playback and seeking. To reproduce the token bug: open the preview, wait >65s, seek, and watch the /file?auth= responses for 401. pytest.ini forces -n 2 --dist loadscope.",
+  "rca of the issue": "Preview seek 401: PreviewDialog calls api.getToken() once and embeds the token in the <video> src. Clerk session JWTs live ~60s, and verify_session_token enforces exp (leeway 5s). Every later Range request the browser makes for seek or buffering reuses the expired token, so it gets 401."
+}

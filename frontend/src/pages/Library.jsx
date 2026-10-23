@@ -4,7 +4,7 @@ import { UploadCloud, Film, Trash2, Play, Radio, Loader2, Smartphone, MonitorPla
 import { toast } from "sonner";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Progress } from "@/components/ui/progress";
-import { useApi, errMsg, formatSize, API } from "@/lib/api";
+import { useApi, errMsg, formatSize, BACKEND_URL } from "@/lib/api";
 import { uploadVideo, formatLength } from "@/lib/upload";
 import { useStudio } from "@/context/StudioContext";
 
@@ -13,7 +13,7 @@ const PreviewDialog = ({ video, onClose }) => {
   const [url, setUrl] = useState(null);
   useEffect(() => {
     if (!video) return setUrl(null);
-    api.getToken().then((t) => setUrl(`${API}/videos/${video.id}/file?auth=${encodeURIComponent(t)}`));
+    api.get(`/videos/${video.id}/play-url`).then((d) => setUrl(`${BACKEND_URL}${d.url}`)).catch((e) => toast.error(errMsg(e)));
   }, [video, api]);
   return (
     <Dialog open={!!video} onOpenChange={(o) => !o && onClose()}>
