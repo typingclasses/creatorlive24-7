@@ -17,6 +17,10 @@ User choices: real streaming to YouTube/Facebook; videos saved in cloud library;
 - Dashboard: status, quick actions, stream history
 - Tested: 24/24 backend tests, frontend flows pass
 
+## 2026-10-23 (iteration 2)
+- Fixed: bundled ffmpeg couldn't resolve hostnames -> added local DNS/TLS relay (backend/relay.py); real YouTube stream verified with user's key
+- Friendly 422 errors for rejected keys, failed starts not logged in history
+
 ## Backlog
 - P1: Scheduled 24/7 playlists (multiple videos in rotation), auto-restart if platform connection drops
 - P1: Video seek/Range support in preview, thumbnails

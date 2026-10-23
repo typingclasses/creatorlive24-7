@@ -1,0 +1,18 @@
+{
+  "summary": "Retested the iteration_2 fixes; all pass. (1) Invalid key 'invalid-key-123' + rtmp://a.rtmp.youtube.com/live2 via the PUBLIC URL: POST /api/streams/video returns 422 application/json after 3.1s with the friendly detail ('The platform refused the stream. Check that your stream key is correct and live streaming is enabled on your channel.'). Cloudflare no longer intercepts it. (2) History count was 14 before and 14 after the failed start, so a failed start creates no entry. Overall 14 -> 16, the 2 new entries being the pytest success stream and the real YouTube stream, both stopped cleanly. (3) Step 3 UI: the sonner toast and studio-last-error ('Last stream stopped: The platform refused the stream...') show the friendly text. Go Live stays available, no LIVE badge, status Offline. (4) pytest 24/24 passed, including the local RTMP listener success path with a history check. (5) Real YouTube stream SECS=30: start 200, live=True on both polls, stop OK. After the tests: no leftover tee ffmpeg or 127.0.0.1 relay listeners, and the test user's destinations were reset to disabled/empty.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": ["/app/backend/tests/test_creatorlive_api.py", "/app/tests/youtube_invalid_key_public.py", "/app/tests/youtube_app_stream.py", "/app/tests/ui_prep.py", "/app/test_reports/pytest/pytest_results.xml"],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "friendly_error: the 'Connection' substring match is broad. Any ffmpeg log line containing 'Connection' (e.g. a mid-stream 'Connection reset' after a long live session) is reported as 'platform refused the stream/check key', which may mislead users when a long-running stream drops. Consider using the refused/key wording only when !session.confirmed, and a 'connection to platform lost' message otherwise.",
+    "GET /api/streams/history is capped with to_list(20), so count-based checks saturate once a user has 20+ entries. Consider pagination.",
+    "Earlier notes remain: the stream key is visible in the ffmpeg argv (ps), and relay upstream-connect failures are not logged."
+  ],
+  "updated_files": ["/app/tests/youtube_invalid_key_public.py (new, public-URL variant with history before/after check)"],
+  "success_rate": {"backend": "100%", "frontend": "100%"},
+  "seed_data_creation": "None. 2 new history entries (pytest success + real YouTube 30s). The test user's destinations were reset to disabled/empty.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Test user user_3L6hhploCiep0mzXWVPKBKQmMP8. To check the failed start: REACT_APP_BACKEND_URL=<public> python /app/tests/youtube_invalid_key_public.py (expect 422 JSON and unchanged history). UI: python /app/tests/ui_prep.py <url> <key> prints VID + TICKET; open /sign-in?__clerk_ticket=..., go to /setup?step=2, open-video-studio-button -> pick-video-<id> -> wizard-next-button -> go-live-start-button. Reset with 'none none'."
+}
