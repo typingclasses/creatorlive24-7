@@ -34,7 +34,7 @@ export default function Header() {
             ))}
           </nav>
         </Show>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center justify-end gap-3 md:min-w-[220px]">
           <Show when="signed-in">
             <LiveBadge />
             <div data-testid="user-menu"><UserButton /></div>

@@ -9,7 +9,7 @@ from typing import Literal, Optional
 from dotenv import load_dotenv
 from fastapi import (APIRouter, Depends, FastAPI, File, HTTPException, Query, UploadFile, WebSocket,
                      WebSocketDisconnect)
-from fastapi.responses import Response
+from fastapi.responses import FileResponse
 from motor.motor_asyncio import AsyncIOMotorClient
 from pydantic import BaseModel
 from starlette.concurrency import run_in_threadpool
@@ -103,17 +103,23 @@ async def enabled_outputs(user_id: str):
 async def upload_video(file: UploadFile = File(...), user=Depends(require_user)):
     if not (file.content_type or "").startswith("video/"):
         raise HTTPException(400, "Only video files are allowed")
-    data = await file.read()
-    if len(data) > MAX_UPLOAD:
-        raise HTTPException(413, "Video must be under 1 GB")
     ext = file.filename.rsplit(".", 1)[-1].lower() if "." in file.filename else "mp4"
     vid = str(uuid.uuid4())
+    local = CACHE_DIR / f"{vid}.{ext}"
+    size = 0
+    with open(local, "wb") as f:
+        while chunk := await file.read(1024 * 1024):
+            size += len(chunk)
+            if size > MAX_UPLOAD:
+                f.close()
+                local.unlink(missing_ok=True)
+                raise HTTPException(413, "Video must be under 1 GB")
+            await run_in_threadpool(f.write, chunk)
     path = f"{storage.APP_NAME}/videos/{user['user_id']}/{vid}.{ext}"
-    result = await run_in_threadpool(storage.put_object, path, data, file.content_type)
+    result = await run_in_threadpool(storage.put_file, path, str(local), file.content_type)
     doc = {"id": vid, "user_id": user["user_id"], "storage_path": result["path"], "title": file.filename,
-           "content_type": file.content_type, "size": len(data), "is_deleted": False, "created_at": now()}
+           "content_type": file.content_type, "size": size, "is_deleted": False, "created_at": now()}
     await db.videos.insert_one(doc.copy())
-    (CACHE_DIR / f"{vid}.{ext}").write_bytes(data)
     doc.pop("storage_path")
     return doc
 
@@ -139,7 +145,7 @@ async def video_file(vid: str, user=Depends(require_user)):
     if not rec:
         raise HTTPException(404, "Not found")
     local = await cached_file(rec)
-    return Response(content=local.read_bytes(), media_type=rec["content_type"])
+    return FileResponse(local, media_type=rec["content_type"])
 
 
 async def cached_file(rec) -> Path:
@@ -166,8 +172,14 @@ async def start_video_stream(body: VideoStartIn, user=Depends(require_user)):
     outs = await enabled_outputs(uid)
     local = await cached_file(rec)
     session = streamer.Session(uid, "video", rec["title"], outs)
+    session.on_exit = lambda s: log_history(s, uid)
     loop = ["-stream_loop", "-1"] if body.loop else []
     await streamer.start_process(session, ["-re", *loop, "-i", str(local)], body.quality, body.fps)
+    await asyncio.sleep(3)
+    if session.proc.returncode is not None:
+        streamer.sessions.pop(uid, None)
+        raise HTTPException(502, "Could not reach the platform. Check your stream key and that the live event is ready. "
+                            + " ".join(list(session.log)[-2:])[-200:])
     return streamer.status(uid)
 
 
@@ -209,6 +221,7 @@ async def live_ws(ws: WebSocket, token: str = Query(...), kind: str = Query("cam
         await ws.close()
         return
     session = streamer.Session(uid, kind, "Camera" if kind == "camera" else "Screen Broadcast", outs)
+    session.on_exit = lambda s: log_history(s, uid)
     await streamer.start_process(session, ["-fflags", "+genpts", "-i", "pipe:0"], quality,
                                  30 if fps not in (30, 60) else fps, stdin=True)
     await ws.send_json({"ok": True})

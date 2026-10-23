@@ -18,9 +18,11 @@ class Session:
         self.proc = None
         self.log = collections.deque(maxlen=15)
         self.ended = False
+        self.on_exit = None
 
 
 sessions: dict = {}
+last_errors: dict = {}
 
 
 def build_tee(destinations):
@@ -46,6 +48,12 @@ async def _drain(session: Session):
         if not line:
             break
         session.log.append(line.decode(errors="ignore").strip())
+    await session.proc.wait()
+    if not session.ended and sessions.get(session.user_id) is session:
+        sessions.pop(session.user_id, None)
+        last_errors[session.user_id] = " ".join(list(session.log)[-3:]) or "Stream ended"
+        if session.on_exit:
+            await session.on_exit(session)
 
 
 async def start_process(session: Session, input_args, quality, fps, stdin=False):
@@ -57,6 +65,7 @@ async def start_process(session: Session, input_args, quality, fps, stdin=False)
         stdout=asyncio.subprocess.DEVNULL, stderr=asyncio.subprocess.PIPE)
     asyncio.create_task(_drain(session))
     sessions[session.user_id] = session
+    last_errors.pop(session.user_id, None)
     return session
 
 
@@ -79,7 +88,7 @@ async def stop(user_id: str):
 def status(user_id: str):
     s = sessions.get(user_id)
     if not s:
-        return {"live": False}
+        return {"live": False, "last_error": last_errors.get(user_id)}
     running = s.proc is not None and s.proc.returncode is None
     return {
         "live": running, "kind": s.kind, "title": s.title, "started_at": s.started_at,

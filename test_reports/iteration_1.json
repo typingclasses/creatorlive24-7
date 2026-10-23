@@ -1,0 +1,42 @@
+{
+  "summary": "Full backend + frontend E2E testing of CreatorLive24/7. Backend: 24/24 pytest pass (auth 401 guards on all endpoints, destinations validation and persistence, video upload/list/file/delete, real RTMP relay to local ffmpeg listener with 1080p/60fps, 409 duplicate stream, history logging, data isolation across 2 Clerk users). Frontend (Clerk ticket sign-in): landing page (hero, banner image, 3 steps, footer with Tripoliya, Patna, Bihar), unauthenticated redirects to /sign-in, session kept after refresh, dashboard greeting/Offline/quick actions/history, Step 1 validation (no platform, enabled without key) and save, Step 2 upload via hidden input, Video Studio picker, toolbar toggles (HD/FHD, 30/60, replay, orientation, tips dialog), Next needs a source, Step 3 Go Live shows LIVE badge, timer and Online, End Stream adds a history entry, Library dropzone upload, preview (plays for webm), Stream button goes to /setup?step=3 with the source set, delete, sign-out, user B sees none of user A's data. Camera, screen and WebSocket were skipped as requested.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "POST /api/streams/video", "issue": "With an unreachable or wrong RTMP target, the endpoint returns 200 with live:true. ffmpeg then exits within about 1s (Connection refused, exit_code 145). The UI shows the 'You're live!' toast and then silently goes back to Offline. The encoder error in status.log is never shown because StepStudio only renders the log when status.live is true. Suggestion: wait about 2-3s after spawning and check proc.returncode (return 502 with the log), and/or show status.log when live is false and exit_code is not null."},
+      {"endpoint": "streamer sessions", "issue": "If ffmpeg dies by itself, the dead session stays in streamer.sessions and no history entry is written unless the user calls /streams/stop. The UI hides the End Stream button when live is false, so the user usually never calls it. The next start overwrites the session and that stream is lost from history."},
+      {"endpoint": "POST /api/videos", "issue": "await file.read() loads the whole upload into RAM (up to 1GB) and then writes it again. GET /videos/{id}/file returns the whole file with read_bytes() and has no Range support, so large previews use a lot of memory and seeking is poor. Consider streaming to disk in chunks and using FileResponse."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "Setup wizard on mobile (390px)", "issue": "Horizontal overflow on Step 2. The stepper pill ('3. Go Live St…') is cut off, the 'Screen Broadcast' subtitle and the 'Open Video Studio' button run past the right edge, and the card is wider than the viewport.", "selector": "[data-testid='open-video-studio-button'], stepper", "priority": "MEDIUM"}
+    ],
+    "integration_issues": [
+      {"flow": "Go Live with an unreachable RTMP target", "issue": "A success toast appears even though the relay failed, and no error is shown (see backend minor issue).", "affected_selectors": ["[data-testid='go-live-start-button']", "[data-testid='studio-encoder-log']"]}
+    ],
+    "design_issues": [
+      {"screen": "Header", "issues": ["The centered nav links shift left when the ON AIR badge appears (layout shift)."]},
+      {"screen": "Step 3 studio", "issues": ["Before going live, the Source stat shows the raw type 'video' instead of the video title."]}
+    ]
+  },
+  "test_report_links": ["/app/backend/tests/test_creatorlive_api.py", "/app/backend/tests/conftest.py", "/app/backend/tests/make_ticket.py", "/app/test_reports/pytest/pytest_results.xml"],
+  "action_items": [
+    "Fix mobile horizontal overflow in the Setup wizard (stepper and Step 2 rows/buttons) at 390px width",
+    "Detect immediate ffmpeg failure in POST /api/streams/video and return an error, or show the encoder error in the Studio when the stream drops",
+    "Log history and clean up sessions when ffmpeg exits by itself"
+  ],
+  "critical_code_review_comments": [
+    "/app/tests/e2e_stream.py does not URL-encode '+' in the email_address query, so the lookup returns empty and user creation fails with 422 on re-runs. Fixed in the new conftest with urllib.parse.quote.",
+    "server.py upload: the whole file is held in memory and a sync write_bytes runs in the event loop; use chunked async or threadpool writes.",
+    "video_file: return FileResponse (Range support) instead of Response(read_bytes()).",
+    "WS token is sent in the query string (it can end up in logs). This is acceptable for an MVP."
+  ],
+  "updated_files": ["/app/backend/tests/conftest.py", "/app/backend/tests/test_creatorlive_api.py", "/app/backend/tests/make_ticket.py", "/app/memory/test_credentials.md"],
+  "success_rate": {"backend": "100% (24/24)", "frontend": "95% (all requested flows pass; mobile overflow issue)"},
+  "test_credentials": "creator+clerk_test@example.com and creator2+clerk_test@example.com (password Test-pass-12345!), recorded in /app/memory/test_credentials.md",
+  "seed_data_creation": "Clerk users A and B. User A has the youtube destination set to rtmp://127.0.0.1:1935/live2 with key testkey. Stream history entries exist for both users. Test videos were deleted (soft delete).",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Run with: cd /app/backend/tests && python -m pytest -n 0 . (xdist parallel causes a Clerk user-creation race). For UI, generate a ticket with python make_ticket.py <email> and open /sign-in?__clerk_ticket=... Each ticket is single-use. Headless Chromium has no H.264, so MP4 previews will not play there; use a webm to check preview. Start an RTMP listener before testing Go Live: ffmpeg -listen 1 -i rtmp://127.0.0.1:1935/live2/testkey -f null -"
+}

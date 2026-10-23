@@ -7,7 +7,7 @@ import { SourceToolbar } from "@/components/wizard/SourceToolbar";
 import { LibraryPicker } from "@/components/wizard/LibraryPicker";
 
 const Row = ({ active, icon: I, color, title, sub, onClick, id, children }) => (
-  <div className={`border rounded-2xl transition-colors ${active ? "border-[#E50914] ring-1 ring-[#E50914]" : "border-slate-200 hover:border-slate-300"}`}>
+  <div className={`min-w-0 border rounded-2xl transition-colors ${active ? "border-[#E50914] ring-1 ring-[#E50914]" : "border-slate-200 hover:border-slate-300"}`}>
     <button onClick={onClick} data-testid={id} className="w-full flex items-center gap-4 p-5 text-left">
       <span className="grid place-items-center w-12 h-12 rounded-full bg-slate-100"><I className={`w-5 h-5 ${color}`} /></span>
       <span className="flex-1 min-w-0"><span className="block text-lg font-medium">{title}</span><span className="block text-xs text-slate-500 truncate">{sub}</span></span>
@@ -58,7 +58,7 @@ export default function StepSource({ onBack, onNext }) {
       <button onClick={onBack} data-testid="source-back-button" className="p-2 -ml-2 rounded-full hover:bg-slate-100"><ArrowLeft className="w-5 h-5" /></button>
       <h2 className="mt-3 text-3xl font-bold">Stream Source</h2>
       <p className="text-xs text-slate-500 mt-1">Destination: <b>Primary RTMP Stream</b> (Stream Key Ready)</p>
-      <div className="mt-6 grid gap-3">
+      <div className="mt-6 grid grid-cols-1 gap-3">
         <Row id="select-source-camera-button" active={source?.type === "camera"} icon={Camera} color="text-slate-700" title="Stream Camera" sub={`Front Webcam / Selfie Cam · ${settings.quality} @ ${settings.fps}fps`} onClick={pickCamera} />
         <Row id="select-source-screen-button" active={source?.type === "screen"} icon={Monitor} color="text-[#1D4ED8]" title="Screen Broadcast" sub="Capture Entire Screen, Window, or Browser Tab with Audio" onClick={pickScreen} />
         <Row id="select-source-video-button" active={source?.type === "video"} icon={Video} color="text-[#7C3AED]" title="Video" sub={source?.type === "video" ? `Cloud Video: ${source.video.title}` : "Stream a video from your cloud library"} onClick={() => setPicker(true)}>

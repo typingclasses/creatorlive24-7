@@ -6,7 +6,7 @@ export const Stepper = ({ step, onChange }) => (
       {steps.map((s, i) => (
         <button key={s} onClick={() => onChange(i + 1)} data-testid={`wizard-step-${i + 1}-tab`}
           className={`px-4 sm:px-6 py-2 rounded-full text-xs sm:text-sm font-semibold whitespace-nowrap transition-colors ${step === i + 1 ? "bg-[#E50914] text-white" : "text-slate-600 hover:bg-slate-100 hover:text-[#0B132B]"}`}>
-          {i + 1}. {s}
+          {i + 1}.<span className="hidden sm:inline"> {s}</span><span className="sm:hidden"> {s.split(" ")[0]}</span>
         </button>
       ))}
     </div>

@@ -68,10 +68,11 @@ export default function StepStudio({ onBack }) {
         {status.live && <span className="absolute top-4 right-4 bg-black/60 text-white px-3 py-1.5 rounded"><LiveTimer startedAt={status.started_at} /></span>}
       </div>
       <div className="mt-4 grid grid-cols-3 gap-3 text-center">
-        {[["Source", status.live ? status.title : source?.type || "—"], ["Quality", `${settings.quality} · ${settings.fps}fps`], ["Status", status.live ? "Online" : "Offline"]].map(([k, v]) => (
+        {[["Source", status.live ? status.title : source?.video?.title || source?.type || "—"], ["Quality", `${settings.quality} · ${settings.fps}fps`], ["Status", status.live ? "Online" : "Offline"]].map(([k, v]) => (
           <div key={k} className="bg-slate-50 rounded-xl py-3"><p className="text-[10px] uppercase tracking-widest text-slate-400">{k}</p><p className="font-mono text-sm truncate px-2" data-testid={`studio-stat-${k.toLowerCase()}`}>{v}</p></div>
         ))}
       </div>
+      {!status.live && status.last_error && <p className="mt-3 text-xs text-[#E50914] bg-red-50 rounded-lg p-3" data-testid="studio-last-error">Last stream stopped: {status.last_error}</p>}
       {status.log?.length > 0 && status.live && <p className="mt-3 text-[11px] font-mono text-amber-600 truncate" data-testid="studio-encoder-log">{status.log[status.log.length - 1]}</p>}
       {status.live ? (
         <button onClick={endStream} disabled={busy} data-testid="end-stream-button" className="mt-6 w-full bg-[#0B132B] hover:bg-black text-white font-semibold py-4 rounded-2xl flex items-center justify-center gap-2 transition-colors">

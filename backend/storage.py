@@ -28,6 +28,18 @@ def put_object(path: str, data: bytes, content_type: str) -> dict:
     return resp.json()
 
 
+def put_file(path: str, local: str, content_type: str) -> dict:
+    for attempt in range(2):
+        with open(local, "rb") as f:
+            resp = requests.put(f"{STORAGE_URL}/objects/{path}",
+                                headers={"X-Storage-Key": init_storage(force=attempt > 0), "Content-Type": content_type},
+                                data=f, timeout=900)
+        if resp.status_code != 404:
+            break
+    resp.raise_for_status()
+    return resp.json()
+
+
 def download_to_file(path: str, dest: str):
     for attempt in range(2):
         with requests.get(f"{STORAGE_URL}/objects/{path}", headers={"X-Storage-Key": init_storage(force=attempt > 0)},
