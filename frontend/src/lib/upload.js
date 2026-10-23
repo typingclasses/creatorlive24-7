@@ -8,14 +8,17 @@ export async function uploadVideo(api, file, onProgress) {
     const blob = file.slice(i * chunk_size, Math.min(file.size, (i + 1) * chunk_size));
     for (let attempt = 1; ; attempt++) {
       try {
-        await api.put(`/uploads/${upload_id}/chunks/${i}`, blob, { headers: { "Content-Type": "application/octet-stream" } });
+        await api.put(`/uploads/${upload_id}/chunks/${i}`, blob, {
+          headers: { "Content-Type": "application/octet-stream" },
+          onUploadProgress: (e) => onProgress?.(Math.min(99, Math.round(((i * chunk_size + e.loaded) / file.size) * 100))),
+        });
         break;
       } catch (e) {
         if (attempt >= 4 || e?.response?.status === 400 || e?.response?.status === 404) throw e;
         await new Promise((r) => setTimeout(r, 1500 * attempt));
       }
     }
-    onProgress?.(Math.round(((i + 1) / total) * 100));
+    onProgress?.(Math.min(99, Math.round(((i + 1) / total) * 100)));
   }
   return api.post(`/uploads/${upload_id}/complete`);
 }

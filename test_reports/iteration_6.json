@@ -1,0 +1,44 @@
+{
+  "summary": "Iteration 6: long video chunked upload + Long/Short format. Long-format upload bug is FIXED. All tests used the PUBLIC URL. (1) /app/tests/chunk_upload_test.py: the 183MB, 6-min 1280x720 file uploaded in 26s and was classified long (duration 360, 1280x720). The 20s vertical file was classified short. (2) New pytest file /app/backend/tests/test_chunked_upload.py: 12 of 14 pass. Covered: init returns chunk_size 20MB; >5GB returns 413; exactly 5GB is accepted; non-video returns 400; no auth returns 401; wrong index returns 409; retrying the same index is idempotent; complete on an incomplete upload returns 400; chunk overflow and empty chunk return 400; another user's upload returns 404; a multi-chunk 200s landscape file is long; a 300s vertical file is short; a 30s landscape file is short; PATCH format persists, a bad value returns 422, another user gets 404; /file without auth or with a bad auth returns 401; /file?auth= returns the exact bytes; after deleting the local cache the file is rebuilt from storage parts with identical bytes. The 2 failures are listed below (negative size accepted; Range not supported). (3) Regression pytest /app/backend/tests: 24/24 pass. (4) Streaming the 183MB chunk-uploaded video after deleting its /tmp cache works: POST /streams/video returned 200 in 11.5s, the cache was rebuilt to 183520070 bytes, the stream was live with the local RTMP listener receiving, then stopped. (5) UI (Clerk ticket sign-in): tab counts and filtering are correct. Library upload of a 47MB long file showed the progress bar at 0/33/67% and the toast 'Uploaded as Long Format', and counts updated. The format badge switches Long to Short and back, and this persists after reload. The Stream button goes to /setup?step=3 with the video selected. In Step 2, video-file-input showed 'Uploading… 0%', then the toast 'Video uploaded to your library', and the row shows 'Cloud Video: TEST_ui_short.mp4'. Preview plays a webm file (readyState 4, playing). The mp4 preview test failed only because the Playwright Chromium build has no H.264 support (canPlayType returned ''); this is not an app bug, and the endpoint returned 200 video/mp4.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "PUT /api/uploads/{id}/chunks/{index}", "issue": "Race condition (reproduced): 3 concurrent PUTs of chunk 0 all returned 200. Result: 3 entries in parts, a 3MB local file for a 1MB upload, received=1MB. Complete then rebuilds from duplicated parts, so the video is corrupted. Can happen when the proxy times out a 20MB chunk while the server is still storing it and the client retries. Fix: claim the index atomically, e.g. update_one({id, 'parts': {'$size': index}}, ...) and check matched_count. Write the local file at offset index*chunk_size, not in append mode, or store parts by index (dict) rather than with $push."},
+      {"endpoint": "GET /api/videos/{id}/file", "issue": "No HTTP Range support (Starlette 0.37.2 FileResponse): a Range request returns 200 with the full body and no Accept-Ranges header. Effects: seeking in the preview does not work (seekable=0), Safari/iOS will not play <video> without 206, and mp4 files with the moov atom at the end must download fully before playback. For 5GB files this makes preview unusable. Implement Range handling (return 206 with Content-Range), or upgrade starlette to a version with range support (>=0.39 / 0.40) together with fastapi."},
+      {"endpoint": "GET /api/videos/{id}/file & POST /api/streams/video", "issue": "cached_file() downloads ALL parts synchronously before responding. The 183MB rebuild took about 8s, so a 5GB video (about 250 parts) would take minutes and exceed the ingress timeout. The cache lives in /tmp and is lost on pod restart. Consider streaming the parts directly (a StreamingResponse over the parts) for /file, and rebuilding in the background or warming the cache for streams."},
+      {"endpoint": "POST /api/uploads", "issue": "size <= 0 (e.g. -5 or 0) is accepted with 200. With size 0, complete succeeds immediately and creates an empty video doc with duration/width/height None and format 'long'. Add validation: size must be > 0 (Pydantic Field(gt=0, le=MAX_UPLOAD))."},
+      {"endpoint": "db.uploads / CACHE_DIR", "issue": "Abandoned uploads are never cleaned up (the uploads doc, the local partial file and the storage parts stay forever). /tmp/creatorlive_videos also grows without limit (up to 5GB per video). Add a TTL index on uploads.created_at and a cleanup/eviction step."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "PreviewDialog (Library.jsx)", "issue": "The preview aspect ratio uses the format flag, not the real dimensions. A landscape clip of 180s or less (auto-classified short), or a long video the user switched to Short, is shown in a 9:16 box with large black bars (seen with the 640x360 webm). Use video.width/height for the aspect ratio.", "selector": "[data-testid='video-preview-dialog']", "priority": "LOW"}
+    ],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Library upload / Step 2 upload", "issues": ["Progress only updates after each 20MB chunk, so a slow connection sits at 0% for a long time (Step 2 showed only 0% for a 14MB file). Use axios onUploadProgress to show smooth byte-level progress.", "Auto rule '<=180s => short' labels short landscape clips as Short Format. This is expected under the stated default, but may surprise users (switching is available)."]}
+    ]
+  },
+  "test_report_links": ["/app/backend/tests/test_chunked_upload.py", "/app/tests/chunk_stream_test.py", "/app/tests/chunk_upload_test.py", "/app/test_reports/pytest/pytest_chunked.xml", "/app/test_reports/pytest/pytest_results_regress.xml"],
+  "action_items": [
+    "Make chunk acceptance atomic (claim the index with a conditional update on parts length) to prevent duplicated or corrupted parts on concurrent retries",
+    "Add HTTP Range (206) support to GET /api/videos/{id}/file so preview can seek and works on Safari/iOS",
+    "Validate UploadInit.size > 0",
+    "Avoid blocking full-file part downloads on request paths for very large videos (stream parts, or prefetch in the background)",
+    "Optional: smoother upload progress via onUploadProgress; size the preview from the video's width/height; clean up stale uploads"
+  ],
+  "critical_code_review_comments": [
+    "upload_chunk: check-then-act race between find_one and update_one; the local file is opened in append mode, so duplicates corrupt the cache",
+    "video_file: require_user(request) is called directly (sync), which is fine; ?auth= token in the URL ends up in logs/history (acceptable for a <video> src, but consider short-lived signed URLs)",
+    "download_parts reads each 20MB part fully into memory (resp.content); acceptable, but iter_content would be leaner",
+    "Old single-shot POST /api/videos still exists and is limited by the proxy; the frontend no longer uses it"
+  ],
+  "updated_files": ["/app/backend/tests/test_chunked_upload.py", "/app/tests/chunk_stream_test.py"],
+  "success_rate": {"backend": "95% (36/38 pytest incl. regression; 2 failures are minor validation/Range gaps)", "frontend": "100% of requested UI flows working"},
+  "test_credentials": "creator+clerk_test@example.com (user_3L6hhploCiep0mzXWVPKBKQmMP8), creator2+clerk_test@example.com for isolation tests; UI sign-in via python /app/backend/tests/make_ticket.py <email> then /sign-in?__clerk_ticket=<t> (a new ticket is needed per browser session)",
+  "seed_data_creation": "The main agent's script left long.mp4 (a2ab61de-...) and short.mp4 (c937621b-...) in the creator user's library (not deleted). All TEST_ videos/uploads I created were deleted; db.uploads is empty. Destinations were restored after the stream test.",
+  "retest_needed": true,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Run from /app/backend/tests: pytest test_chunked_upload.py -n 0 -v (pytest.ini adds xdist; module fixture ordering needs -n 0). Stream test: cd /app/backend && python /app/tests/chunk_stream_test.py <video_id> (deletes the cache, streams to a local RTMP listener, restores destinations). The Playwright Chromium build has no H.264, so test preview playback with a VP8 webm file.",
+  "rca of the issue": "Original bug: a single multipart POST /api/videos for large long-format files exceeded the ingress body/time limit (~100MB). The chunked upload (20MB parts) fixes it; verified with a 183MB file through the public URL."
+}

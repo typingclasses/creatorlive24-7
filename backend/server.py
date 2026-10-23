@@ -10,9 +10,10 @@ from typing import Literal, Optional
 from dotenv import load_dotenv
 from fastapi import (APIRouter, Depends, FastAPI, File, HTTPException, Query, Request, UploadFile, WebSocket,
                      WebSocketDisconnect)
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, Response, StreamingResponse
 from motor.motor_asyncio import AsyncIOMotorClient
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
+from pymongo import ReturnDocument
 from starlette.concurrency import run_in_threadpool
 from starlette.middleware.cors import CORSMiddleware
 
@@ -100,12 +101,12 @@ async def enabled_outputs(user_id: str):
     return outs
 
 
-CHUNK_MAX = 30 * 1024 * 1024
+CHUNK_SIZE = 20 * 1024 * 1024
 
 
 class UploadInit(BaseModel):
     filename: str
-    size: int
+    size: int = Field(gt=0)
     content_type: str
 
 
@@ -173,9 +174,9 @@ async def upload_init(body: UploadInit, user=Depends(require_user)):
         raise HTTPException(413, "Video must be under 5 GB")
     ext = body.filename.rsplit(".", 1)[-1].lower() if "." in body.filename else "mp4"
     up = {"id": str(uuid.uuid4()), "user_id": user["user_id"], "filename": body.filename, "ext": ext,
-          "content_type": body.content_type, "size": body.size, "received": 0, "parts": [], "created_at": now()}
+          "content_type": body.content_type, "size": body.size, "received": 0, "claimed": 0, "parts": [], "created_at": now()}
     await db.uploads.insert_one(up.copy())
-    return {"upload_id": up["id"], "chunk_size": 20 * 1024 * 1024}
+    return {"upload_id": up["id"], "chunk_size": CHUNK_SIZE}
 
 
 @api.put("/uploads/{upload_id}/chunks/{index}")
@@ -185,19 +186,28 @@ async def upload_chunk(upload_id: str, index: int, request: Request, user=Depend
         raise HTTPException(404, "Upload not found")
     if index < len(up["parts"]):
         return {"received": up["received"]}  # already stored (client retry)
-    if index != len(up["parts"]):
+    if index > len(up["parts"]):
         raise HTTPException(409, f"Expected chunk {len(up['parts'])}")
     data = await request.body()
-    if not data or len(data) > CHUNK_MAX or up["received"] + len(data) > up["size"]:
+    if not data or len(data) > CHUNK_SIZE or up["received"] + len(data) > up["size"]:
         raise HTTPException(400, "Invalid chunk")
-    path = f"{storage.APP_NAME}/videos/{user['user_id']}/{upload_id}/part{index:05d}"
-    result = await run_in_threadpool(storage.put_object, path, data, "application/octet-stream")
-    local = CACHE_DIR / f"{upload_id}.{up['ext']}"
-    with open(local, "ab") as f:
-        await run_in_threadpool(f.write, data)
-    received = up["received"] + len(data)
-    await db.uploads.update_one({"id": upload_id}, {"$push": {"parts": result["path"]}, "$set": {"received": received}})
-    return {"received": received}
+    claimed = await db.uploads.find_one_and_update({"id": upload_id, "claimed": index, "parts": {"$size": index}},
+                                                   {"$inc": {"claimed": 1}})
+    if not claimed:
+        raise HTTPException(409, "Chunk in progress, retry" if index < up.get("claimed", 0) else f"Expected chunk {len(up['parts'])}")
+    try:
+        path = f"{storage.APP_NAME}/videos/{user['user_id']}/{upload_id}/part{index:05d}"
+        result = await run_in_threadpool(storage.put_object, path, data, "application/octet-stream")
+        local = CACHE_DIR / f"{upload_id}.{up['ext']}"
+        with open(local, "r+b" if local.exists() else "wb") as f:
+            f.seek(claimed["received"])
+            await run_in_threadpool(f.write, data)
+    except Exception:
+        await db.uploads.update_one({"id": upload_id, "claimed": index + 1}, {"$set": {"claimed": index}})
+        raise
+    up = await db.uploads.find_one_and_update({"id": upload_id}, {"$push": {"parts": result["path"]}, "$inc": {"received": len(data)}},
+                                              return_document=ReturnDocument.AFTER)
+    return {"received": up["received"]}
 
 
 @api.post("/uploads/{upload_id}/complete")
@@ -247,18 +257,62 @@ async def video_file(vid: str, request: Request, auth: Optional[str] = Query(Non
     rec = await db.videos.find_one({"id": vid, "user_id": user["user_id"], "is_deleted": False})
     if not rec:
         raise HTTPException(404, "Not found")
-    local = await cached_file(rec)
-    return FileResponse(local, media_type=rec["content_type"])
-
-
-async def cached_file(rec) -> Path:
-    ext = rec.get("ext") or rec["storage_path"].rsplit(".", 1)[-1]
-    local = CACHE_DIR / f"{rec['id']}.{ext}"
+    local = local_path(rec)
     if not local.exists():
+        prepare(rec)
         if rec.get("storage_parts"):
-            await run_in_threadpool(storage.download_parts, rec["storage_parts"], str(local))
-        else:
-            await run_in_threadpool(storage.download_to_file, rec["storage_path"], str(local))
+            return StreamingResponse(storage.iter_parts(rec["storage_parts"]), media_type=rec["content_type"])
+        local = await cached_file(rec)
+    return ranged_file(local, rec["content_type"], request.headers.get("range"))
+
+
+def ranged_file(local: Path, media_type: str, range_header: Optional[str]):
+    size = local.stat().st_size
+    m = re.match(r"bytes=(\d*)-(\d*)", range_header or "")
+    if not m or (not m[1] and not m[2]):
+        return FileResponse(local, media_type=media_type, headers={"Accept-Ranges": "bytes"})
+    start, end = (int(m[1]), int(m[2]) if m[2] else size - 1) if m[1] else (size - int(m[2]), size - 1)
+    end = min(end, size - 1)
+    if start > end:
+        return Response(status_code=416, headers={"Content-Range": f"bytes */{size}"})
+
+    def body():
+        with open(local, "rb") as f:
+            f.seek(start)
+            left = end - start + 1
+            while left > 0 and (chunk := f.read(min(1024 * 1024, left))):
+                left -= len(chunk)
+                yield chunk
+    return StreamingResponse(body(), status_code=206, media_type=media_type, headers={
+        "Accept-Ranges": "bytes", "Content-Range": f"bytes {start}-{end}/{size}", "Content-Length": str(end - start + 1)})
+
+
+def local_path(rec) -> Path:
+    return CACHE_DIR / f"{rec['id']}.{rec.get('ext') or rec['storage_path'].rsplit('.', 1)[-1]}"
+
+
+preparing: dict = {}
+
+
+def prepare(rec) -> asyncio.Task:
+    """Rebuild the local copy from cloud storage once, in the background."""
+    if rec["id"] not in preparing:
+        local = local_path(rec)
+        fn = storage.download_parts if rec.get("storage_parts") else storage.download_to_file
+        src = rec.get("storage_parts") or rec["storage_path"]
+        task = asyncio.create_task(run_in_threadpool(fn, src, str(local)))
+        task.add_done_callback(lambda _: preparing.pop(rec["id"], None))
+        preparing[rec["id"]] = task
+    return preparing[rec["id"]]
+
+
+async def cached_file(rec, wait: float = 600) -> Path:
+    local = local_path(rec)
+    if not local.exists():
+        try:
+            await asyncio.wait_for(asyncio.shield(prepare(rec)), timeout=wait)
+        except asyncio.TimeoutError:
+            raise HTTPException(422, "Your video is being prepared from cloud storage. Try Go Live again in a minute.")
     return local
 
 
@@ -277,7 +331,7 @@ async def start_video_stream(body: VideoStartIn, user=Depends(require_user)):
     if not rec:
         raise HTTPException(404, "Video not found")
     outs = await enabled_outputs(uid)
-    local = await cached_file(rec)
+    local = await cached_file(rec, wait=45)
     session = streamer.Session(uid, "video", rec["title"], outs)
     session.on_exit = lambda s: log_history(s, uid)
     loop = ["-stream_loop", "-1"] if body.loop else []

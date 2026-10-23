@@ -19,7 +19,7 @@ const PreviewDialog = ({ video, onClose }) => {
     <Dialog open={!!video} onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="max-w-3xl" data-testid="video-preview-dialog">
         <DialogHeader><DialogTitle className="truncate pr-6">{video?.title}</DialogTitle></DialogHeader>
-        <div className={`${video?.format === "short" ? "aspect-[9/16] max-h-[70vh] mx-auto" : "aspect-video"} bg-black rounded-xl grid place-items-center overflow-hidden`}>
+        <div className="bg-black rounded-xl grid place-items-center overflow-hidden max-h-[70vh] mx-auto w-full" style={{ aspectRatio: video?.width ? `${video.width} / ${video.height}` : "16 / 9", maxWidth: video?.height > video?.width ? "40vh" : undefined }}>
           {url ? <video src={url} controls autoPlay className="w-full h-full" /> : <Loader2 className="w-6 h-6 animate-spin text-white" />}
         </div>
       </DialogContent>

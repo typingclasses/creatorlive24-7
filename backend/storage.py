@@ -66,6 +66,13 @@ def download_parts(paths, dest: str):
     os.replace(dest + ".part", dest)
 
 
+def iter_parts(paths):
+    for p in paths:
+        resp = requests.get(f"{STORAGE_URL}/objects/{p}", headers={"X-Storage-Key": init_storage()}, timeout=600)
+        resp.raise_for_status()
+        yield resp.content
+
+
 def get_object(path: str):
     resp = requests.get(f"{STORAGE_URL}/objects/{path}", headers={"X-Storage-Key": init_storage()}, timeout=600)
     resp.raise_for_status()
