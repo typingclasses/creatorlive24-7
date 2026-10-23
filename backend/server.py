@@ -178,8 +178,8 @@ async def start_video_stream(body: VideoStartIn, user=Depends(require_user)):
     await asyncio.sleep(3)
     if session.proc.returncode is not None:
         streamer.sessions.pop(uid, None)
-        raise HTTPException(502, "Could not reach the platform. Check your stream key and that the live event is ready. "
-                            + " ".join(list(session.log)[-2:])[-200:])
+        raise HTTPException(422, streamer.friendly_error(session.log))
+    session.confirmed = True
     return streamer.status(uid)
 
 
@@ -222,6 +222,7 @@ async def live_ws(ws: WebSocket, token: str = Query(...), kind: str = Query("cam
         return
     session = streamer.Session(uid, kind, "Camera" if kind == "camera" else "Screen Broadcast", outs)
     session.on_exit = lambda s: log_history(s, uid)
+    session.confirmed = True
     await streamer.start_process(session, ["-fflags", "+genpts", "-i", "pipe:0"], quality,
                                  30 if fps not in (30, 60) else fps, stdin=True)
     await ws.send_json({"ok": True})
@@ -229,7 +230,7 @@ async def live_ws(ws: WebSocket, token: str = Query(...), kind: str = Query("cam
         while True:
             chunk = await ws.receive_bytes()
             if session.proc.returncode is not None:
-                await ws.send_json({"error": "Encoder stopped: " + " ".join(session.log)[-300:]})
+                await ws.send_json({"error": streamer.friendly_error(session.log)})
                 break
             session.proc.stdin.write(chunk)
             await session.proc.stdin.drain()

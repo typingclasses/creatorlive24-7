@@ -25,6 +25,7 @@ class Session:
         self.ended = False
         self.on_exit = None
         self.relays = []
+        self.confirmed = False
 
 
 sessions: dict = {}
@@ -38,6 +39,13 @@ async def build_tee(session):
         session.relays.append(server)
         urls.append(f"[f=flv:onfail=ignore]{local}")
     return "|".join(urls)
+
+
+def friendly_error(log) -> str:
+    text = " ".join(log)
+    if "Input/output error" in text or "Connection" in text or "Nothing was written" in text:
+        return "The platform refused the stream. Check that your stream key is correct and live streaming is enabled on your channel."
+    return "The stream stopped unexpectedly." + (f" ({text[-120:]})" if text else "")
 
 
 def close_relays(session):
@@ -68,8 +76,8 @@ async def _drain(session: Session):
     close_relays(session)
     if not session.ended and sessions.get(session.user_id) is session:
         sessions.pop(session.user_id, None)
-        last_errors[session.user_id] = " ".join(list(session.log)[-3:]) or "Stream ended"
-        if session.on_exit:
+        last_errors[session.user_id] = friendly_error(session.log)
+        if session.on_exit and session.confirmed:
             await session.on_exit(session)
 
 

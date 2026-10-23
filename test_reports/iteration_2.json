@@ -1,0 +1,41 @@
+{
+  "summary": "I tested the DNS/TLS relay fix with a real YouTube stream, an invalid-key failure, the pytest regression suite, the Step 3 UI Go Live/End Stream flow against a local RTMP listener, and relay cleanup. Real YouTube stream via relay: start 200, live=True on every 15s poll for 60s, stop OK, key cleared. Invalid key 'invalid-key-123': the backend returns 502 after about 3s with a message and status has last_error. pytest: 24/24 passed. UI success path: LIVE badge, timer ticking (00:00:02 -> 00:00:07), header ON AIR badge, End Stream returns to the Go Live button. Relay cleanup: after my streams stopped (success and failure) no relay listener or ffmpeg from my test user was left. The one remaining 127.0.0.1 listener belongs to another user's active stream (see context). Main bug: the 502 status code is caught by Cloudflare at the public URL. The JSON detail is replaced with an HTML page, so the UI toast shows the Cloudflare text 'The origin web server returned an invalid or incomplete response to Cloudflare...' instead of the app's message.",
+  "backend_issues": {
+    "critical": [
+      {"endpoint": "POST /api/streams/video (and any 502 path)", "issue": "Returns HTTP 502 when ffmpeg fails at once. Through the public ingress, Cloudflare replaces 5xx gateway responses (502/503/504) with its own HTML page, so the frontend never gets the JSON 'detail'. Reproduced: public URL returns 502 text/html with the Cloudflare page; localhost:8001 returns the correct JSON. Use a non-gateway status code instead (for example 400 or 422; 424 also works).", "priority": "HIGH"}
+    ],
+    "minor": [
+      {"endpoint": "POST /api/streams/video failure path", "issue": "Race: ffmpeg exits within about 0.5s, before the 3s check. _drain then pops the session, sets last_error and calls on_exit -> log_history. Every failed start (wrong key) is saved in stream history as a 0.5s 'stream'. The 502 branch's streamer.sessions.pop is then a no-op. Suggest a flag on the session to skip history when the start fails."},
+      {"endpoint": "GET /api/streams/status last_error / 502 detail", "issue": "The message is raw ffmpeg stderr ('[vf#0:0 @ 0x...] Task finished with error code: -5 (Input/output error) ... Nothing was written into output file'). It is not user friendly; show something like 'YouTube rejected the stream key' and keep the raw log as secondary detail."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [
+      {"flow": "Step 3 Go Live with an invalid key", "issue": "The error toast shows the Cloudflare 'origin web server returned an invalid or incomplete response' text because of the 502 status above. studio-last-error does show the raw ffmpeg message. Go Live stays available and is correct.", "affected_selectors": ["[data-sonner-toast]", "[data-testid='studio-last-error']"]}
+    ],
+    "design_issues": [
+      {"screen": "Go Live Studio", "issues": ["studio-last-error shows cryptic ffmpeg internals (hex addresses, error code -5)"]}
+    ]
+  },
+  "test_report_links": ["/app/backend/tests/test_creatorlive_api.py", "/app/tests/youtube_app_stream.py", "/app/tests/youtube_invalid_key.py", "/app/tests/ui_prep.py", "/app/test_reports/pytest/pytest_results.xml"],
+  "action_items": [
+    "HIGH: change the HTTPException(502, ...) in start_video_stream (and anywhere else a 502/503/504 is raised) to 400/422/424 so the JSON detail reaches the UI through Cloudflare. Also handle non-JSON error bodies in the frontend toast.",
+    "Do not save history entries for starts that failed (race between _drain on_exit and the 3s check).",
+    "Map common ffmpeg failures (I/O error -5 on the first connect = rejected key, or the live event is not ready) to a friendly message.",
+    "Check the other live session: backend pid 5410 has an ffmpeg (pid 5871, started about 18:54 UTC by POST /api/streams/video 200 from external IP 10.231.129.157) streaming a .webm to a YouTube ingest (209.85.200.134:1935). It is not the test user. If it is your own UI test with the real key, stop it and clear the key."
+  ],
+  "critical_code_review_comments": [
+    "relay.py: if the upstream connect fails, local_w.close() is called with no logging, so DNS/TLS errors show only as an ffmpeg I/O error. Log the exception or put it in session.log.",
+    "relay.py: _pipe closes only the writer and does not close the other direction. This is fine because ffmpeg exits, but a half-open upstream could hang the gather until the peer closes.",
+    "Server.close() in close_relays is not awaited with wait_closed(). The listening socket is still closed (verified), but active handler tasks are not cancelled.",
+    "The stream key is embedded in the ffmpeg argv (rtmp://127.0.0.1:port/live2/<KEY>), so it shows in `ps` output to anyone on the host. Acceptable for the MVP, but note it."
+  ],
+  "updated_files": ["/app/tests/youtube_invalid_key.py (new)", "/app/tests/ui_prep.py (new)"],
+  "success_rate": {"backend": "96% (24/24 pytest + real YouTube 60s live + invalid key; 502 body lost via public ingress)", "frontend": "85% (success path all OK; failure toast shows Cloudflare text)"},
+  "seed_data_creation": "None. The test user's destinations were reset to disabled/empty after the tests. History now has 2-3 short failed-start entries from the invalid-key tests.",
+  "retest_needed": true,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Test user user_3L6hhploCiep0mzXWVPKBKQmMP8 (creator+clerk_test@example.com). Use /app/tests/ui_prep.py <url> <key> to set the youtube destination and print a sign-in ticket (pass 'none none' to clear). Local listener: <imageio ffmpeg> -listen 1 -i rtmp://127.0.0.1:1935/live2/testkey -f null -. The real YouTube test (/app/tests/youtube_app_stream.py, SECS=60) passed. To check the 502 fix, POST /api/streams/video through the PUBLIC URL with an invalid key and confirm the JSON detail arrives.",
+  "rca of the issue": "Cloudflare in front of the preview ingress intercepts origin 502 Bad Gateway responses and serves its own HTML error page. The backend correctly sends 502 with JSON {detail}, but the browser gets text/html, and the frontend's error handler shows the Cloudflare text. Reproduction: set youtube key 'invalid-key-123', POST https://<public>/api/streams/video -> 502 text/html. Mitigation: use 4xx (400/422/424)."
+}

@@ -5,7 +5,12 @@ import { useAuth } from "@clerk/react";
 export const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 export const API = `${BACKEND_URL}/api`;
 
-export const errMsg = (e) => e?.response?.data?.detail || e?.message || "Something went wrong";
+export const errMsg = (e) => {
+  const d = e?.response?.data?.detail;
+  if (typeof d === "string") return d;
+  if (e?.response?.status >= 500) return "Server is busy right now, please try again.";
+  return e?.message || "Something went wrong";
+};
 
 export function useApi() {
   const { getToken } = useAuth();
