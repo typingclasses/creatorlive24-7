@@ -1,4 +1,5 @@
 import asyncio
+import re
 import collections
 from datetime import datetime, timezone
 
@@ -26,6 +27,7 @@ class Session:
         self.on_exit = None
         self.relays = []
         self.confirmed = False
+        self.failed = set()
 
 
 sessions: dict = {}
@@ -71,7 +73,12 @@ async def _drain(session: Session):
         line = await session.proc.stderr.readline()
         if not line:
             break
-        session.log.append(line.decode(errors="ignore").strip())
+        text = line.decode(errors="ignore").strip()
+        for d in session.outputs:
+            text = text.replace(d["key"], "***")
+        if m := re.search(r"Slave muxer #(\d+) failed", text):
+            session.failed.add(int(m.group(1)))
+        session.log.append(text)
     await session.proc.wait()
     close_relays(session)
     if not session.ended and sessions.get(session.user_id) is session:
@@ -117,6 +124,7 @@ def status(user_id: str):
     running = s.proc is not None and s.proc.returncode is None
     return {
         "live": running, "kind": s.kind, "title": s.title, "started_at": s.started_at,
-        "platforms": [d["platform"] for d in s.outputs], "log": list(s.log)[-5:],
+        "platforms": [d["platform"] for i, d in enumerate(s.outputs) if i not in s.failed],
+        "failed_platforms": [d["platform"] for i, d in enumerate(s.outputs) if i in s.failed], "log": list(s.log)[-5:],
         "exit_code": None if running else s.proc.returncode,
     }

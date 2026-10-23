@@ -1,0 +1,28 @@
+{
+  "summary": "Facebook Live test passed, backend only. (1) Real Facebook stream over rtmps via the local TLS relay (SECS=45): start 200, platforms ['facebook'], live=True on all 3 polls, no ffmpeg errors in the log, stop OK. The history entry was logged and the destinations were cleared. (2) Invalid key 'FB-invalid-123' with rtmps://live-api-s.facebook.com:443/rtmp via the PUBLIC URL: 422 application/json after 3.1s with the friendly detail ('The platform refused the stream. Check that your stream key is correct...'). Status live=False with last_error set. No relay listeners leaked. History unchanged (same latest id, count 18 -> 18). (3) YouTube + Facebook together for 30s: start 200, platforms ['youtube','facebook'], live=True on all 3 polls, stop OK, keys cleared. No leftover tee ffmpeg or 127.0.0.1 listeners. (4) pytest /app/backend/tests: 24/24 passed. (5) Extra check, valid YouTube key + invalid Facebook key: start returns 200 and status reports live with platforms ['youtube','facebook'], though ffmpeg dropped the Facebook output ('continuing with 1/2 slaves'). See the minor issues.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "POST /api/streams/video, GET /api/streams/status", "issue": "Partial failure is silent with multiple destinations. tee uses onfail=ignore, so with one bad key (FB-invalid-123) and one good key (YouTube) the start returns 200 and status says live with platforms ['youtube','facebook'], while the Facebook output has already failed ('Slave muxer #1 failed ... continuing with 1/2 slaves'). The user believes they are live on Facebook when they are not."},
+      {"endpoint": "GET /api/streams/status", "issue": "The 'log' field returns raw ffmpeg stderr, which contains the full relay URL including the stream key (e.g. rtmp://127.0.0.1:34183/rtmp/<KEY>). It leaks the key to the frontend/UI and is not user-friendly. Mask keys or don't expose raw log lines."}
+    ]
+  },
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": ["/app/tests/facebook_app_stream.py", "/app/tests/facebook_invalid_key_public.py", "/app/tests/both_platforms_stream.py", "/app/backend/tests/test_creatorlive_api.py", "/app/test_reports/pytest/pytest_results.xml"],
+  "action_items": [
+    "Optional: detect per-output failure. Parse 'Slave ... failed' lines from the tee log and expose a per-platform state (e.g. failed_platforms / platforms reduced to the working ones), or return a 422/warning if any output fails in the 3s start window.",
+    "Optional: mask stream keys in status.log, or drop raw ffmpeg lines from the API response."
+  ],
+  "critical_code_review_comments": [
+    "streamer.status reports 'platforms' from configuration, not from the actual live outputs. Combined with onfail=ignore this hides partial failures.",
+    "relay.handle swallows upstream connect/TLS errors without logging, so Facebook TLS/DNS problems are invisible in backend logs.",
+    "Carried over: friendly_error's broad 'Connection' match; history capped at 20 (to_list(20)); stream key visible in ffmpeg argv (ps)."
+  ],
+  "updated_files": ["/app/tests/facebook_invalid_key_public.py (new)", "/app/tests/both_platforms_stream.py (new)"],
+  "success_rate": {"backend": "100%", "frontend": "not tested (backend only)"},
+  "test_credentials": "From /app/memory/test_credentials.md: test user user_3L6hhploCiep0mzXWVPKBKQmMP8; keys read from backend/.env, never printed.",
+  "seed_data_creation": "None. New history entries for the test user: the real FB stream, the dual-platform stream, the partial-failure check stream and the pytest success stream. The destinations were reset to disabled/empty after every script.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Run from /app/backend. Real FB: SECS=45 python /app/tests/facebook_app_stream.py. Invalid FB via public URL: python /app/tests/facebook_invalid_key_public.py (compares the latest history id, since history is capped at 20). Dual: SECS=30 python /app/tests/both_platforms_stream.py. Always clear destinations afterwards (the scripts do it in finally/at end)."
+}
