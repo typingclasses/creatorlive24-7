@@ -3,6 +3,7 @@ import { toast } from "sonner";
 import { Loader2 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { Switch } from "@/components/ui/switch";
 import { useApi, errMsg } from "@/lib/api";
 import { useAppData } from "@/context/AppDataContext";
 
@@ -27,6 +28,11 @@ export default function AdminSettings() {
   const inp = (k, ph) => <Input value={f[k] || ""} placeholder={ph ? `e.g. ${ph}` : ""} className={cls} onChange={(e) => set(k, e.target.value)} data-testid={`settings-${k}-input`} />;
   const fixUrl = (u) => (u && !/^https?:\/\//i.test(u.trim()) ? `https://${u.trim()}` : (u || "").trim());
 
+  const toggleLogo = async (v) => {
+    set("watermark_enabled", v);
+    try { await api.put("/admin/settings", { ...settings, watermark_enabled: v }); toast.success(v ? "Logo will show on free users' streams" : "Logo hidden for everyone"); loadSettings(); }
+    catch (e) { set("watermark_enabled", !v); toast.error(errMsg(e)); }
+  };
   const save = async () => {
     setBusy(true);
     const body = { ...f, social: Object.fromEntries(Object.entries(f.social || {}).map(([k, v]) => [k, fixUrl(v)])) };
@@ -42,6 +48,19 @@ export default function AdminSettings() {
         <Field label="Tagline">{inp("tagline")}</Field>
         <Field label="Business address">{inp("address")}</Field>
       </Section>
+      <div className="bg-white border border-slate-200 rounded-3xl p-6 flex flex-wrap items-center gap-6 justify-between" data-testid="settings-watermark-card">
+        <div className="flex items-center gap-4">
+          <img src="/watermark.png" alt="logo" className="h-8 border rounded-full" />
+          <div>
+            <h3 className="text-lg font-bold">Logo on free users' live stream</h3>
+            <p className="text-sm text-slate-500">Shown at top-left for users without a paid plan. Paid users never get it.</p>
+          </div>
+        </div>
+        <div className="flex items-center gap-2">
+          <span className="text-sm font-semibold">{f.watermark_enabled !== false ? "Showing" : "Hidden"}</span>
+          <Switch checked={f.watermark_enabled !== false} onCheckedChange={toggleLogo} data-testid="settings-watermark-switch" />
+        </div>
+      </div>
       <Section title="Support Us">
         <Field label="Mobile number">{inp("mobile", "+91 98765 43210")}</Field>
         <Field label="WhatsApp number">{inp("whatsapp", "+91 98765 43210")}</Field>

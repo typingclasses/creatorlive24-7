@@ -1,5 +1,6 @@
 import asyncio
 import re
+from pathlib import Path
 import collections
 from datetime import datetime, timezone
 
@@ -56,10 +57,22 @@ def close_relays(session):
     session.relays = []
 
 
-def encode_args(quality: str, fps: int):
+WATERMARK = str(Path(__file__).parent / "assets" / "watermark.png")
+
+
+def video_filter(height: int, watermark: bool) -> str:
+    base = f"[0:v]scale=-2:'min({height},ih)':flags=bicubic,format=yuv420p"
+    if not watermark:
+        return base + "[vout]"
+    wm_h, margin = round(height * 0.055) // 2 * 2, round(height * 0.03)
+    return (f"[0:v]scale=-2:{height}:flags=bicubic,format=yuv420p[base];[1:v]scale=-1:{wm_h}[wm];"
+            f"[base][wm]overlay=x={margin}:y={margin}:eof_action=repeat,format=yuv420p[vout]")
+
+
+def encode_args(quality: str, fps: int, watermark: bool = False):
     height, bitrate = QUALITY.get(quality, QUALITY["720p"])
     return [
-        "-vf", f"scale=-2:'min({height},ih)':flags=bicubic,format=yuv420p",
+        "-filter_complex", video_filter(height, watermark), "-map", "[vout]", "-map", "0:a:0?",
         "-c:v", "libx264", "-preset", "veryfast", "-tune", "zerolatency",
         "-r", str(fps), "-g", str(fps * 2), "-keyint_min", str(fps * 2),
         "-b:v", bitrate, "-maxrate", bitrate, "-bufsize", "9000k",
@@ -88,9 +101,11 @@ async def _drain(session: Session):
             await session.on_exit(session)
 
 
-async def start_process(session: Session, input_args, quality, fps, stdin=False):
-    args = [FFMPEG, "-hide_banner", "-loglevel", "warning", *input_args,
-            "-map", "0:v:0", "-map", "0:a:0?", *encode_args(quality, fps),
+async def start_process(session: Session, input_args, quality, fps, stdin=False, watermark=False):
+    session.watermark = watermark
+    wm_input = ["-i", WATERMARK] if watermark else []
+    args = [FFMPEG, "-hide_banner", "-loglevel", "warning", *input_args, *wm_input,
+            *encode_args(quality, fps, watermark),
             "-f", "tee", await build_tee(session)]
     session.proc = await asyncio.create_subprocess_exec(
         *args, stdin=asyncio.subprocess.PIPE if stdin else asyncio.subprocess.DEVNULL,
@@ -124,6 +139,7 @@ def status(user_id: str):
     running = s.proc is not None and s.proc.returncode is None
     return {
         "live": running, "kind": s.kind, "title": s.title, "started_at": s.started_at,
+        "watermark": getattr(s, "watermark", False),
         "platforms": [d["platform"] for i, d in enumerate(s.outputs) if i not in s.failed],
         "failed_platforms": [d["platform"] for i, d in enumerate(s.outputs) if i in s.failed], "log": list(s.log)[-5:],
         "exit_code": None if running else s.proc.returncode,

@@ -362,7 +362,8 @@ async def start_video_stream(body: VideoStartIn, user=Depends(admin.require_acti
     session = streamer.Session(uid, "video", rec["title"], outs)
     session.on_exit = lambda s: log_history(s, uid)
     loop = ["-stream_loop", "-1"] if body.loop else []
-    await streamer.start_process(session, ["-re", *loop, "-i", str(local)], body.quality, body.fps)
+    await streamer.start_process(session, ["-re", *loop, "-i", str(local)], body.quality, body.fps,
+                                 watermark=await admin.needs_watermark(uid))
     await asyncio.sleep(3)
     if session.proc.returncode is not None:
         streamer.sessions.pop(uid, None)
@@ -417,7 +418,7 @@ async def live_ws(ws: WebSocket, token: str = Query(...), kind: str = Query("cam
     session.on_exit = lambda s: log_history(s, uid)
     session.confirmed = True
     await streamer.start_process(session, ["-fflags", "+genpts", "-i", "pipe:0"], quality,
-                                 30 if fps not in (30, 60) else fps, stdin=True)
+                                 30 if fps not in (30, 60) else fps, stdin=True, watermark=await admin.needs_watermark(uid))
     await ws.send_json({"ok": True})
     try:
         while True:

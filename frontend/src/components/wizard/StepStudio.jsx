@@ -5,6 +5,8 @@ import { useStudio } from "@/context/StudioContext";
 import { useApi, errMsg } from "@/lib/api";
 import { startBrowserBroadcast } from "@/lib/broadcast";
 import { LiveTimer } from "@/components/wizard/LiveTimer";
+import { Link } from "react-router-dom";
+import { useAppData } from "@/context/AppDataContext";
 
 const Preview = ({ source }) => {
   const ref = useRef(null);
@@ -23,6 +25,8 @@ export default function StepStudio({ onBack }) {
   const [busy, setBusy] = useState(false);
   const [dest, setDest] = useState(null);
   const bc = useRef(null);
+  const { me, settings: site } = useAppData();
+  const showLogo = status.live ? status.watermark : site?.watermark_enabled !== false && !me?.plan_valid;
 
   useEffect(() => { api.get("/destinations").then(setDest).catch(() => {}); }, [api]);
   useEffect(() => () => bc.current?.stop(), []);
@@ -64,9 +68,15 @@ export default function StepStudio({ onBack }) {
       </div>
       <div className="mt-6 relative aspect-video rounded-2xl overflow-hidden bg-[#0B0F19]">
         <Preview source={source} />
-        {status.live && <span className="absolute top-4 left-4 flex items-center gap-1.5 bg-[#E50914] text-white text-xs font-bold px-3 py-1.5 rounded" data-testid="studio-live-badge"><span className="w-2 h-2 bg-white rounded-full live-dot" /> LIVE</span>}
+        {showLogo && <img src="/watermark.png" alt="CreatorLive24/7" data-testid="studio-watermark" className="absolute top-[3%] left-[3%] h-[5.5%] min-h-[14px] pointer-events-none" />}
+        {status.live && <span className="absolute bottom-4 left-4 flex items-center gap-1.5 bg-[#E50914] text-white text-xs font-bold px-3 py-1.5 rounded" data-testid="studio-live-badge"><span className="w-2 h-2 bg-white rounded-full live-dot" /> LIVE</span>}
         {status.live && <span className="absolute top-4 right-4 bg-black/60 text-white px-3 py-1.5 rounded"><LiveTimer startedAt={status.started_at} /></span>}
       </div>
+      {showLogo && (
+        <p className="mt-3 text-xs text-slate-600 bg-amber-50 border border-amber-200 rounded-lg p-3" data-testid="studio-watermark-note">
+          Free plan: the CreatorLive24/7 logo appears at the top-left of your live stream. <Link to="/plans" className="font-semibold text-[#E50914] underline" data-testid="studio-upgrade-link">Take a paid plan to remove it</Link>
+        </p>
+      )}
       <div className="mt-4 grid grid-cols-3 gap-3 text-center">
         {[["Source", status.live ? status.title : source?.video?.title || source?.type || "—"], ["Quality", `${settings.quality} · ${settings.fps}fps`], ["Status", status.live ? "Online" : "Offline"]].map(([k, v]) => (
           <div key={k} className="bg-slate-50 rounded-xl py-3"><p className="text-[10px] uppercase tracking-widest text-slate-400">{k}</p><p className="font-mono text-sm truncate px-2" data-testid={`studio-stat-${k.toLowerCase()}`}>{v}</p></div>

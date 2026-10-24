@@ -22,7 +22,7 @@ DEFAULT_SETTINGS = {
     "address": "Tripoliya, Patna, Bihar", "support_email": "", "mobile": "", "whatsapp": "",
     "support_text": "Need help with streaming? Call or WhatsApp us.",
     "social": {"youtube": "", "facebook": "", "instagram": "", "twitter": ""},
-    "upi_id": "", "upi_name": "CreatorLive24/7",
+    "upi_id": "", "upi_name": "CreatorLive24/7", "watermark_enabled": True,
 }
 SEED_PLANS = [
     {"name": "Starter", "price": 199, "duration_days": 30, "features": ["Live to YouTube & Facebook", "Video Library", "720p streaming"], "sort": 1},
@@ -90,6 +90,14 @@ async def require_admin(prof=Depends(get_profile)) -> dict:
     if (prof.get("email") or "").lower() not in admin_emails():
         raise HTTPException(403, "Admin access required")
     return prof
+
+
+async def needs_watermark(user_id: str) -> bool:
+    """Free users (no valid plan) get the logo on their live stream, unless admin turned it off."""
+    s = await db.settings.find_one({"key": "site"}) or {}
+    if not s.get("watermark_enabled", True):
+        return False
+    return not _plan_valid(await db.users.find_one({"user_id": user_id}) or {})
 
 
 def _plan_valid(prof):
@@ -167,6 +175,7 @@ class SettingsIn(BaseModel):
     social: Social
     upi_id: str = ""
     upi_name: str = ""
+    watermark_enabled: bool = True
 
 
 class PlanIn(BaseModel):
