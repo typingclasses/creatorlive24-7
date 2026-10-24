@@ -1,0 +1,24 @@
+{
+  "summary": "Re-tested the iteration_7 fixes. The HIGH preview token expiry bug is fixed. GET /api/videos/{id}/play-url returns a signed /file URL (uid, exp, sig) that lasts 6h. In Library, the preview <video> src now uses sig= instead of auth=. In the browser: uploaded a 200s VP9 WebM, opened the preview, paused, waited 80s, then seeked to 170s. The Range requests returned 206 (bytes=10223616-, bytes=8519680-), playback resumed at 174s and no 401 occurred. Backend: 46/46 pytest pass (the 40 old tests plus 6 new ones in test_play_url.py). The long upload script works: 183 MB, 360s 1280x720 -> long; 20s 720x1280 -> short.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "GET /api/videos/{id}/file (cache missing)", "issue": "Content-Length now equals size (verified 2826209 matches the file). It still returns 200 without Accept-Ranges and ignores the Range header, so seeking doesn't work for the first preview after cache eviction until the background rebuild finishes. Known since iteration_7; low impact."}
+    ]
+  },
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": ["/app/backend/tests/test_play_url.py", "/app/backend/tests/test_chunked_upload.py", "/app/backend/tests/test_creatorlive_api.py", "/app/test_reports/pytest/pytest_results.xml", "/app/tests/chunk_upload_test.py"],
+  "action_items": ["Optional MINOR: in the /file parts-stream path, honour Range (or wait briefly for the cache) and send Accept-Ranges."],
+  "critical_code_review_comments": [
+    "The signed URL is a bearer link: anyone who has it can fetch the video for 6h. That's acceptable for previews, but don't log full URLs. Deleting the video revokes access because /file checks is_deleted.",
+    "_media_sig signs 'vid:uid:exp' joined with ':'. Collisions are theoretically possible if ids contain ':'. Here they can't, because the ownership check requires the video to belong to that uid. Low risk.",
+    "The HMAC key is derived from CLERK_SECRET_KEY, so rotating the Clerk key invalidates all play URLs. That's fine, but a dedicated MEDIA_SIGNING_KEY would separate the two concerns."
+  ],
+  "updated_files": ["/app/backend/tests/test_play_url.py"],
+  "success_rate": {"backend": "100% (46/46)", "frontend": "100% (preview via play-url, seek after 80s OK, upload, delete)"},
+  "test_credentials": "creator+clerk_test@example.com (Clerk dev, user_3L6hhploCiep0mzXWVPKBKQmMP8); creator2+clerk_test@example.com used as user_b. UI sign-in: python /app/backend/tests/make_ticket.py <email> -> /sign-in?__clerk_ticket=<t>",
+  "seed_data_creation": "TEST_seek.webm uploaded via the UI and deleted afterwards. pytest fixtures delete their own videos. long.mp4/short.mp4 from chunk_upload_test.py remain for the test user.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "test_play_url.py covers: play-url shape/exp; 401 without auth; 404 for another user's video; signed full/Range access; tampered sig/uid/exp -> 401; expired valid HMAC -> 401 (test computes the HMAC from CLERK_SECRET_KEY in env, never printed); user_b's valid sig on user_a's video -> 404; parts-stream Content-Length; concurrent duplicate chunk -> 409 'Chunk in progress, retry'. Use VP9 WebM (/tmp/TEST_seek.webm) for Chromium playback tests."
+}

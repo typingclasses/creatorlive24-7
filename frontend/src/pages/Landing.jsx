@@ -1,4 +1,8 @@
+import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
+import axios from "axios";
+import { API } from "@/lib/api";
+import { PlanCard } from "@/components/PlanCard";
 import { Radio, Library, Repeat, KeyRound, MonitorUp, Clapperboard, ArrowRight, Youtube, Facebook } from "lucide-react";
 
 const BANNER = "https://customer-assets-7cd3h4nn.emergentagent.net/job_3bf591bf-31b9-4281-8286-96cc6e1ae707/artifacts/aa52c68221b69745_CreatorLive24_7%20Streaming%20Platform%20Banner%20%281%29.webp";
@@ -14,6 +18,21 @@ const steps = [
   { icon: MonitorUp, n: "02", t: "Stream Source", s: "Pick your camera, screen or a video from the library." },
   { icon: Clapperboard, n: "03", t: "Go Live Studio", s: "Preview, hit Go Live and watch the timer run." },
 ];
+
+const Pricing = () => {
+  const [plans, setPlans] = useState([]);
+  useEffect(() => { axios.get(`${API}/plans`).then((r) => setPlans(r.data)).catch(() => {}); }, []);
+  if (!plans.length) return null;
+  return (
+    <section id="pricing" className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-20" data-testid="landing-pricing">
+      <p className="text-xs uppercase tracking-[0.25em] text-[#E50914] font-semibold">Plans</p>
+      <h2 className="mt-3 text-3xl md:text-4xl font-bold">Simple pricing, pay with UPI.</h2>
+      <div className="mt-10 grid md:grid-cols-3 gap-6">
+        {plans.map((p) => <PlanCard key={p.id} plan={p} action={<Link to="/sign-in" data-testid={`landing-plan-cta-${p.id}`} className="block text-center w-full bg-[#0B132B] hover:bg-[#E50914] text-white font-semibold py-3 rounded-xl transition-colors">Get started</Link>} />)}
+      </div>
+    </section>
+  );
+};
 
 export default function Landing() {
   return (
@@ -70,6 +89,7 @@ export default function Landing() {
           </div>
         </div>
       </section>
+      <Pricing />
     </div>
   );
 }

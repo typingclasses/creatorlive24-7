@@ -26,8 +26,9 @@ load_dotenv(ROOT_DIR / '.env')
 
 try:
     from backend.clerk_auth import clerk_router, require_user, verify_session_token
-    from backend import storage, streamer
+    from backend import storage, streamer, admin
 except ModuleNotFoundError:
+    import admin
     from clerk_auth import clerk_router, require_user, verify_session_token
     import storage
     import streamer
@@ -83,7 +84,7 @@ async def get_destinations(user=Depends(require_user)):
 
 
 @api.put("/destinations")
-async def save_destinations(body: DestinationsIn, user=Depends(require_user)):
+async def save_destinations(body: DestinationsIn, user=Depends(admin.require_active)):
     data = body.model_dump()
     for p, d in data.items():
         d["url"] = d["url"].strip() or DEFAULT_URLS[p]
@@ -149,7 +150,7 @@ async def save_video_doc(user_id, vid, title, content_type, size, local, storage
 
 
 @api.post("/videos")
-async def upload_video(file: UploadFile = File(...), user=Depends(require_user)):
+async def upload_video(file: UploadFile = File(...), user=Depends(admin.require_active)):
     if not (file.content_type or "").startswith("video/"):
         raise HTTPException(400, "Only video files are allowed")
     ext = file.filename.rsplit(".", 1)[-1].lower() if "." in file.filename else "mp4"
@@ -171,7 +172,7 @@ async def upload_video(file: UploadFile = File(...), user=Depends(require_user))
 
 
 @api.post("/uploads")
-async def upload_init(body: UploadInit, user=Depends(require_user)):
+async def upload_init(body: UploadInit, user=Depends(admin.require_active)):
     if not body.content_type.startswith("video/"):
         raise HTTPException(400, "Only video files are allowed")
     if body.size > MAX_UPLOAD:
@@ -184,7 +185,7 @@ async def upload_init(body: UploadInit, user=Depends(require_user)):
 
 
 @api.put("/uploads/{upload_id}/chunks/{index}")
-async def upload_chunk(upload_id: str, index: int, request: Request, user=Depends(require_user)):
+async def upload_chunk(upload_id: str, index: int, request: Request, user=Depends(admin.require_active)):
     up = await db.uploads.find_one({"id": upload_id, "user_id": user["user_id"]})
     if not up:
         raise HTTPException(404, "Upload not found")
@@ -216,7 +217,7 @@ async def upload_chunk(upload_id: str, index: int, request: Request, user=Depend
 
 
 @api.post("/uploads/{upload_id}/complete")
-async def upload_complete(upload_id: str, user=Depends(require_user)):
+async def upload_complete(upload_id: str, user=Depends(admin.require_active)):
     up = await db.uploads.find_one({"id": upload_id, "user_id": user["user_id"]})
     if not up:
         raise HTTPException(404, "Upload not found")
@@ -349,7 +350,7 @@ async def log_history(session, user_id):
 
 
 @api.post("/streams/video")
-async def start_video_stream(body: VideoStartIn, user=Depends(require_user)):
+async def start_video_stream(body: VideoStartIn, user=Depends(admin.require_active)):
     uid = user["user_id"]
     if streamer.status(uid)["live"]:
         raise HTTPException(409, "A stream is already live. End it first.")
@@ -397,6 +398,11 @@ async def live_ws(ws: WebSocket, token: str = Query(...), kind: str = Query("cam
     except HTTPException:
         await ws.close(code=4401)
         return
+    prof = await db.users.find_one({"user_id": uid}) or {}
+    if prof.get("active") is False:
+        await ws.send_json({"error": "Your account is deactivated. Please contact support."})
+        await ws.close()
+        return
     if streamer.status(uid)["live"]:
         await ws.send_json({"error": "A stream is already live. End it first."})
         await ws.close()
@@ -431,6 +437,7 @@ async def live_ws(ws: WebSocket, token: str = Query(...), kind: str = Query("cam
 
 @app.on_event("startup")
 async def startup():
+    await admin.init(db)
     try:
         await run_in_threadpool(storage.init_storage)
         logger.info("Storage initialized")
@@ -446,6 +453,8 @@ async def shutdown():
 
 
 app.include_router(api)
+app.include_router(admin.public)
+app.include_router(admin.admin)
 app.include_router(clerk_router)
 app.add_middleware(CORSMiddleware, allow_credentials=True,
                    allow_origins=os.environ.get('CORS_ORIGINS', '*').split(','),

@@ -23,6 +23,8 @@ User choices: real streaming to YouTube/Facebook; videos saved in cloud library;
 
 - Facebook rtmps verified live with user key; YouTube+Facebook together verified; failed platform warning; stream keys masked in logs
 
+- Library: chunked uploads (20MB parts, up to 5GB per video) fixing long-format upload failure; auto Long/Short detection + tabs + switch; Range-enabled preview with 6h signed play URL
+
 ## Backlog
 - P1: Scheduled 24/7 playlists (multiple videos in rotation), auto-restart if platform connection drops
 - P1: Video seek/Range support in preview, thumbnails

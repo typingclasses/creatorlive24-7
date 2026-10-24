@@ -3,6 +3,7 @@ import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { Show, SignIn, SignUp } from "@clerk/react";
 import ClerkAuthProvider from "@/components/auth/ClerkAuthProvider";
 import { StudioProvider } from "@/context/StudioContext";
+import { AppDataProvider } from "@/context/AppDataContext";
 import { Toaster } from "@/components/ui/sonner";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
@@ -10,6 +11,8 @@ import Landing from "@/pages/Landing";
 import Dashboard from "@/pages/Dashboard";
 import Setup from "@/pages/Setup";
 import Library from "@/pages/Library";
+import Plans from "@/pages/Plans";
+import Admin from "@/pages/Admin";
 
 const Private = ({ children }) => (
   <>
@@ -33,6 +36,7 @@ function App() {
   return (
     <BrowserRouter>
       <ClerkAuthProvider>
+        <AppDataProvider>
         <StudioProvider>
           <Header />
           <main className="min-h-[70vh]">
@@ -43,12 +47,15 @@ function App() {
               <Route path="/dashboard" element={<Private><Dashboard /></Private>} />
               <Route path="/setup" element={<Private><Setup /></Private>} />
               <Route path="/library" element={<Private><Library /></Private>} />
+              <Route path="/plans" element={<Private><Plans /></Private>} />
+              <Route path="/admin" element={<Private><Admin /></Private>} />
               <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
           </main>
           <Footer />
           <Toaster richColors position="top-right" />
         </StudioProvider>
+        </AppDataProvider>
       </ClerkAuthProvider>
     </BrowserRouter>
   );
