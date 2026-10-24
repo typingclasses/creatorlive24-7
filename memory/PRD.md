@@ -27,6 +27,8 @@ User choices: real streaming to YouTube/Facebook; videos saved in cloud library;
 
 - Admin panel (ADMIN_EMAILS=maasitaniwas@gmail.com): stats, users (email, active/deactivate, plan assign), plans & offers CRUD, UPI QR payments with UTR approve/reject, main page settings (social, support, mobile, WhatsApp, address, UPI). Footer + floating Admin Panel shortcut. Landing pricing.
 
+- Watermark: CreatorLive24/7 logo burned into free users' live streams (top-left, ffmpeg overlay, backend/assets/watermark.png); removed for valid paid plans; admin global show/hide switch in Main Page Settings; studio preview + upgrade note
+
 ## Backlog
 - P1: Scheduled 24/7 playlists (multiple videos in rotation), auto-restart if platform connection drops
 - P1: Video seek/Range support in preview, thumbnails

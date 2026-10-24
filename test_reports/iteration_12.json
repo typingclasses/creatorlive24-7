@@ -1,0 +1,28 @@
+{
+  "summary": "Tested the CreatorLive24/7 watermark feature on the backend and frontend. Backend (new file test_watermark.py, 6/6 pass): GET /api/settings exposes watermark_enabled, and a non-admin PUT /api/admin/settings gets 403. For each case below, a local RTMP listener recorded the stream to FLV, a frame was extracted and its pixels checked using a solid-blue source clip. (1) Free creator: status.watermark=true and the logo is burned in at top-left (27% non-blue pixels in the top-left region, 0% bottom-right, 1280x720). (2) Plan assigned via admin PATCH: plan_valid=true, watermark=false, no logo in the frame; then plan_id '' restored plan_valid=false. (3) Admin turned watermark_enabled off: watermark=false and no logo; it was turned back on afterwards. (4) WebSocket /api/ws/live with VP8/Opus webm chunks: {ok:true}, live=true, watermark=true, no ffmpeg errors in the log, logo present in the recorded frame. Frontend (Playwright, 1920x1080, Clerk tickets): free user on Step 3 sees studio-watermark at exactly 3% x / 3% y / 5.5% height of the preview, plus studio-watermark-note. studio-upgrade-link goes to /plans. While live the logo stays, the LIVE badge is at bottom-left and the timer at top-right. Go Live and End Stream work. Paid user sees neither the logo nor the note, offline or live. In Admin > Main Page Settings, settings-watermark-card shows the switch. Toggling off gives the toast 'Logo hidden for everyone', the public API returns false, the state persists after a reload, and the studio hides the logo. Toggling on gives a toast, persists, and the logo is back. No page errors. Regression: full pytest gives 62 tests, 60 pass, 2 fail. Both failures are stale tests caused by data the real admin changed, not code bugs: the 'Pro Yearly' plan no longer exists, and Pro now has an offer_price of 299, so the payment amount is 299, not 499.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "streamer.video_filter", "issue": "The watermark path uses scale=-2:{height} (always rescales, so it upscales sources smaller than the target), but the no-watermark path uses min(height, ih). A 360p video from a free user gets upscaled to 720p. This is cosmetic and costs a little CPU/bandwidth. Consider using the same min() logic for both paths."}
+    ]
+  },
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": ["/app/backend/tests/test_watermark.py", "/app/tests/ui_prep_watermark.py", "/app/test_reports/pytest/pytest_results.xml"],
+  "action_items": [
+    "Update the stale tests in test_admin.py: test_seeded_plans expects a 'Pro Yearly' plan that the real admin deleted, and TestPayments.test_flow asserts amount == price but Pro now has offer_price 299. Assert offer_price or price instead, or use a dedicated TEST_ plan.",
+    "Optional: in video_filter's watermark branch, use the same min(height, ih) scaling as the no-watermark branch.",
+    "Remove admin+clerk_test@example.com from ADMIN_EMAILS before production."
+  ],
+  "critical_code_review_comments": [
+    "needs_watermark is evaluated once when the stream starts. If a plan expires or is bought mid-stream, the live stream keeps its current state until restarted, and the UI follows status.watermark while live. That is consistent, and probably fine.",
+    "The watermark PNG is a single-frame input with overlay eof_action=repeat, which works for both looping (-stream_loop) and stdin webm inputs, as verified.",
+    "AdminSettings toggleLogo sends {...settings (saved), watermark_enabled}, so it doesn't accidentally save unsaved edits to other fields. Good."
+  ],
+  "updated_files": ["/app/backend/tests/test_watermark.py", "/app/tests/ui_prep_watermark.py"],
+  "success_rate": {"backend": "100% of the watermark tests (6/6); full suite 60/62, the 2 failures are stale-data tests", "frontend": "100%"},
+  "test_credentials": "creator+clerk_test@example.com (free user), admin+clerk_test@example.com (admin). UI ticket: python /app/backend/tests/make_ticket.py <email>, or python /app/tests/ui_prep_watermark.py free|paid|off|restore (prints VID and TICKET).",
+  "seed_data_creation": "The TEST_wm.mp4 and TEST_ui_wm.mp4 videos were created and then deleted. Restored state: creator has no plan, is active and not live; watermark_enabled is true. The creator's YouTube destination is left pointing at rtmp://127.0.0.1:1935/live2 (testkey), which is what the earlier tests use.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Run the watermark tests alone, without xdist: cd /app/backend/tests && pytest test_watermark.py -n0. They use port 1935 and would clash with the stream tests. In the Studio, use data-testid go-live-start-button, because get_by_role 'Go Live' matches the stepper button first. Clerk tickets are single-use."
+}
