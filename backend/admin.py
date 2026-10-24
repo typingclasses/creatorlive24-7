@@ -87,7 +87,7 @@ async def require_active(prof=Depends(get_profile)) -> dict:
 
 
 async def require_admin(prof=Depends(get_profile)) -> dict:
-    if prof.get("email", "").lower() not in admin_emails():
+    if (prof.get("email") or "").lower() not in admin_emails():
         raise HTTPException(403, "Admin access required")
     return prof
 
@@ -99,7 +99,7 @@ def _plan_valid(prof):
 
 @public.get("/me")
 async def me(prof=Depends(get_profile)):
-    return {**prof, "is_admin": prof.get("email", "").lower() in admin_emails(), "plan_valid": _plan_valid(prof)}
+    return {**prof, "is_admin": (prof.get("email") or "").lower() in admin_emails(), "plan_valid": _plan_valid(prof)}
 
 
 @public.get("/settings")
@@ -251,7 +251,7 @@ async def list_users(_=Depends(require_admin)):
         pass
     users = await db.users.find({}, {"_id": 0}).sort("created_at", -1).to_list(2000)
     admins = admin_emails()
-    return [{**u, "is_admin": u.get("email", "") in admins, "plan_valid": _plan_valid(u)} for u in users]
+    return [{**u, "is_admin": (u.get("email") or "").lower() in admins, "plan_valid": _plan_valid(u)} for u in users]
 
 
 @admin.patch("/users/{uid}")

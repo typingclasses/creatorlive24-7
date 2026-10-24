@@ -1,0 +1,37 @@
+{
+  "summary": "Tested the new bottom admin entry points and the fixes from iteration_9. Backend: pytest passes 62/62 (61 regression tests plus the new TestUtrValidation in test_admin.py). For UTR validation: 7 spaces, '     A', 'TEST-1234', 'TEST 12 34' and 'ab@cd#ef' all return 422. ' <9 digits> ' returns 200 and is stored trimmed, which /payments/mine confirms. As admin on desktop (1920): footer-admin-panel-link and floating-admin-panel-button are both present and visible on /dashboard, /setup, /library and /plans. The floating button is hidden on /admin while the footer link stays. Clicking either one opens /admin. All 5 admin tabs still work. On desktop the floating button overlaps no interactive element, either at the top of the page or scrolled to the bottom. On mobile (390) both entry points appear and clicking each one opens /admin. As a normal user (creator) on all 4 pages: no footer link, no floating button and no nav-admin, and /admin redirects to /dashboard. Signed out on / and /sign-in: neither entry point appears. PayDialog: the UTR is cleared when you reopen the same plan or open another plan. Plan cards are equal height in AdminPlans (334/334/334) and on /plans (314/314/314).",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "GET /api/admin/users (admin.py:254)", "issue": "is_admin is computed as u.get('email','') in admins without .lower(), while admin_emails() is lowercased. A mixed-case email in the Clerk sync would show as non-admin in the Users table. Use (u.get('email') or '').lower()."},
+      {"endpoint": "/api/me (admin.py:102)", "issue": "prof.get('email', '').lower() raises AttributeError if email is stored as None, because the key exists. Use (prof.get('email') or '').lower()."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Floating Admin Panel button (all pages)", "issues": [
+        "The button background (#0B132B) is the same colour as the footer background. When the button sits over the footer it becomes a borderless white label ('Admin Panel' text only), and on mobile it covers the copyright line. Fix: use a contrasting style (e.g. gold #FFB703 or a white/ring border), or hide the floating button when the footer is in view.",
+        "Mobile 390: the button is fixed at x=224..370, y=780..824. While scrolling it temporarily covers the right part of full-width controls: setup save-keys-next-button, the facebook-server-url/stream-key inputs and toggle-key-visibility, dashboard quick-upload-video, and buy-plan buttons on /plans. All of these stay clickable on their left part or after scrolling, so this isn't blocking. Consider an icon-only FAB on mobile (sm:inline-flex label) or extra bottom padding on the page."
+      ]}
+    ]
+  },
+  "test_report_links": ["/app/backend/tests/test_admin.py", "/app/backend/tests/test_creatorlive_api.py", "/app/backend/tests/test_chunked_upload.py", "/app/backend/tests/test_play_url.py", "/app/test_reports/pytest/pytest_results.xml"],
+  "action_items": [
+    "Optional: make the floating Admin Panel button contrast with the dark footer (or hide it when the footer is visible), and make it icon-only or smaller on mobile.",
+    "Optional: lowercase emails in the list_users is_admin check, and guard against a None email in /me.",
+    "Remove admin+clerk_test@example.com from ADMIN_EMAILS before production."
+  ],
+  "critical_code_review_comments": [
+    "Footer.jsx AdminShortcuts depends on me.is_admin from AppDataContext. The UI is only a convenience; the backend still enforces admin via require_admin, which is correct.",
+    "The Toaster is top-right, so it doesn't collide with the bottom-right floating button."
+  ],
+  "updated_files": ["/app/backend/tests/test_admin.py (added TestUtrValidation)"],
+  "success_rate": {"backend": "100% (62/62)", "frontend": "100% of requested flows; 1 minor design issue (floating button contrast/overlap on mobile)"},
+  "test_credentials": "admin+clerk_test@example.com (admin), creator+clerk_test@example.com (user). Password Test-pass-12345!. UI: python /app/backend/tests/make_ticket.py <email> -> /sign-in?__clerk_ticket=<t>",
+  "seed_data_creation": "None. The TEST UTR payments and the trimmed numeric UTR were deleted from Mongo. The creator was left active and settings were restored by the fixtures.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Footer admin link: data-testid footer-admin-panel-link. Floating button: floating-admin-panel-button (not rendered on /admin). Run pytest with -n 2 --dist loadscope. Clerk tickets are single-use."
+}

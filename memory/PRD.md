@@ -25,6 +25,8 @@ User choices: real streaming to YouTube/Facebook; videos saved in cloud library;
 
 - Library: chunked uploads (20MB parts, up to 5GB per video) fixing long-format upload failure; auto Long/Short detection + tabs + switch; Range-enabled preview with 6h signed play URL
 
+- Admin panel (ADMIN_EMAILS=maasitaniwas@gmail.com): stats, users (email, active/deactivate, plan assign), plans & offers CRUD, UPI QR payments with UTR approve/reject, main page settings (social, support, mobile, WhatsApp, address, UPI). Footer + floating Admin Panel shortcut. Landing pricing.
+
 ## Backlog
 - P1: Scheduled 24/7 playlists (multiple videos in rotation), auto-restart if platform connection drops
 - P1: Video seek/Range support in preview, thumbnails

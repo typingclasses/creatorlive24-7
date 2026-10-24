@@ -237,3 +237,22 @@ class TestSettings:
         assert g["social"]["instagram"] == "https://instagram.com/t"
         bad = dict(s, site_name="")
         assert requests.put(f"{API}/admin/settings", json=bad, headers=admin_h).status_code == 422
+
+
+# --- UTR whitespace/charset validation (iteration_10 fix) ---
+class TestUtrValidation:
+    def test_utr_strip_and_charset(self, user_a, mongo):
+        h = user_a["headers"]
+        pro = [p for p in requests.get(f"{API}/plans").json()][0]
+        for bad in ["       ", "     A", "TEST-1234", "TEST 12 34", "ab@cd#ef"]:
+            r = requests.post(f"{API}/payments", json={"plan_id": pro["id"], "utr": bad}, headers=h)
+            assert r.status_code == 422, (bad, r.status_code, r.text)
+        num = "4" + uuid.uuid4().hex[:8].translate(str.maketrans("abcdef", "123456"))
+        try:
+            r = requests.post(f"{API}/payments", json={"plan_id": pro["id"], "utr": f" {num} "}, headers=h)
+            assert r.status_code == 200, r.text
+            assert r.json()["utr"] == num
+            mine = [p for p in requests.get(f"{API}/payments/mine", headers=h).json() if p["id"] == r.json()["id"]]
+            assert mine and mine[0]["utr"] == num
+        finally:
+            mongo.payments.delete_many({"utr": num})

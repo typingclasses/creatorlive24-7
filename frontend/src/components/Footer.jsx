@@ -35,8 +35,8 @@ const AdminShortcuts = () => {
         </Link>
       </div>
       {pathname !== "/admin" && (
-        <Link to="/admin" data-testid="floating-admin-panel-button" className="fixed bottom-5 right-5 z-50 inline-flex items-center gap-2 bg-[#0B132B] text-white font-semibold text-sm px-5 py-3 rounded-full shadow-xl hover:bg-[#E50914] transition-colors">
-          <Shield className="w-4 h-4" /> Admin Panel
+        <Link to="/admin" data-testid="floating-admin-panel-button" className="fixed bottom-5 right-5 z-50 inline-flex items-center gap-2 bg-[#FFB703] text-[#0B132B] ring-2 ring-white font-semibold text-sm p-3 sm:px-5 rounded-full shadow-xl hover:bg-[#E50914] hover:text-white transition-colors">
+          <Shield className="w-5 h-5" /> <span className="hidden sm:inline">Admin Panel</span>
         </Link>
       )}
     </>
