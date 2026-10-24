@@ -23,11 +23,14 @@ export default function AdminSettings() {
   if (!f) return <Loader2 className="w-5 h-5 animate-spin mx-auto" />;
   const set = (k, v) => setF((x) => ({ ...x, [k]: v }));
   const setSocial = (k, v) => setF((x) => ({ ...x, social: { ...x.social, [k]: v } }));
-  const inp = (k, ph) => <Input value={f[k] || ""} placeholder={ph} onChange={(e) => set(k, e.target.value)} data-testid={`settings-${k}-input`} />;
+  const cls = "bg-white text-[#0B132B] placeholder:text-slate-300 placeholder:italic";
+  const inp = (k, ph) => <Input value={f[k] || ""} placeholder={ph ? `e.g. ${ph}` : ""} className={cls} onChange={(e) => set(k, e.target.value)} data-testid={`settings-${k}-input`} />;
+  const fixUrl = (u) => (u && !/^https?:\/\//i.test(u.trim()) ? `https://${u.trim()}` : (u || "").trim());
 
   const save = async () => {
     setBusy(true);
-    try { await api.put("/admin/settings", f); toast.success("Main page settings updated"); loadSettings(); }
+    const body = { ...f, social: Object.fromEntries(Object.entries(f.social || {}).map(([k, v]) => [k, fixUrl(v)])) };
+    try { const saved = await api.put("/admin/settings", body); setF((x) => ({ ...x, ...saved })); toast.success("Main page settings updated"); loadSettings(); }
     catch (e) { toast.error(errMsg(e)); }
     finally { setBusy(false); }
   };
@@ -43,12 +46,12 @@ export default function AdminSettings() {
         <Field label="Mobile number">{inp("mobile", "+91 98765 43210")}</Field>
         <Field label="WhatsApp number">{inp("whatsapp", "+91 98765 43210")}</Field>
         <Field label="Support email">{inp("support_email", "support@example.com")}</Field>
-        <Field label="Support message"><Textarea rows={2} value={f.support_text || ""} onChange={(e) => set("support_text", e.target.value)} data-testid="settings-support_text-input" /></Field>
+        <Field label="Support message"><Textarea rows={2} className={cls} value={f.support_text || ""} onChange={(e) => set("support_text", e.target.value)} data-testid="settings-support_text-input" /></Field>
       </Section>
       <Section title="Social media links">
         {["youtube", "facebook", "instagram", "twitter"].map((k) => (
           <Field key={k} label={k === "twitter" ? "X (Twitter)" : k[0].toUpperCase() + k.slice(1)}>
-            <Input value={f.social?.[k] || ""} placeholder="https://" onChange={(e) => setSocial(k, e.target.value)} data-testid={`settings-social-${k}-input`} />
+            <Input value={f.social?.[k] || ""} placeholder={`e.g. https://${k === "twitter" ? "x" : k}.com/yourpage`} className={cls} onChange={(e) => setSocial(k, e.target.value)} data-testid={`settings-social-${k}-input`} />
           </Field>
         ))}
       </Section>
