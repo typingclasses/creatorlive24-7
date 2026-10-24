@@ -1,4 +1,6 @@
 import { MapPin, Zap, ShieldCheck, TrendingUp, Coins, Youtube, Facebook, Instagram, Twitter, Phone, Mail, MessageCircle } from "lucide-react";
+import { Link, useLocation } from "react-router-dom";
+import { Shield } from "lucide-react";
 import { Logo } from "@/components/Logo";
 import { useAppData } from "@/context/AppDataContext";
 
@@ -20,6 +22,26 @@ const strip = [
   { icon: TrendingUp, t: "Build Your Audience", s: "More views, more growth" },
   { icon: Coins, t: "Monetize Smarter", s: "Turn views into income" },
 ];
+
+const AdminShortcuts = () => {
+  const { me } = useAppData();
+  const { pathname } = useLocation();
+  if (!me?.is_admin) return null;
+  return (
+    <>
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-6">
+        <Link to="/admin" data-testid="footer-admin-panel-link" className="inline-flex items-center gap-2 bg-[#FFB703] text-[#0B132B] font-semibold text-sm px-5 py-2.5 rounded-full hover:bg-white transition-colors">
+          <Shield className="w-4 h-4" /> Admin Panel
+        </Link>
+      </div>
+      {pathname !== "/admin" && (
+        <Link to="/admin" data-testid="floating-admin-panel-button" className="fixed bottom-5 right-5 z-50 inline-flex items-center gap-2 bg-[#0B132B] text-white font-semibold text-sm px-5 py-3 rounded-full shadow-xl hover:bg-[#E50914] transition-colors">
+          <Shield className="w-4 h-4" /> Admin Panel
+        </Link>
+      )}
+    </>
+  );
+};
 
 export default function Footer() {
   const { settings } = useAppData();
@@ -50,6 +72,7 @@ export default function Footer() {
           ) : null)}
         </div>
       </div>
+      <AdminShortcuts />
       <p className="text-center text-xs text-slate-500 pb-6">© {new Date().getFullYear()} {settings?.site_name || "CreatorLive24/7"} · {s.address}</p>
     </footer>
   );

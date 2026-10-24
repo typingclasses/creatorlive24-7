@@ -15,6 +15,7 @@ const PayDialog = ({ plan, onClose, onDone }) => {
   const { settings } = useAppData();
   const [utr, setUtr] = useState("");
   const [busy, setBusy] = useState(false);
+  useEffect(() => setUtr(""), [plan]);
   if (!plan) return null;
   const amount = planPrice(plan);
   const upi = `upi://pay?${new URLSearchParams({ pa: settings?.upi_id || "", pn: settings?.upi_name || "CreatorLive24/7", am: String(amount), cu: "INR", tn: `${plan.name} plan` })}`;

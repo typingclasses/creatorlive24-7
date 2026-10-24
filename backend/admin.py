@@ -5,7 +5,7 @@ from typing import List, Literal, Optional
 
 import requests
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from starlette.concurrency import run_in_threadpool
 
 try:
@@ -115,7 +115,12 @@ async def public_plans():
 
 class PaymentIn(BaseModel):
     plan_id: str
-    utr: str = Field(min_length=6, max_length=40)
+    utr: str = Field(min_length=6, max_length=40, pattern=r"^[A-Za-z0-9]+$")
+
+    @field_validator("utr", mode="before")
+    @classmethod
+    def _strip(cls, v):
+        return v.strip() if isinstance(v, str) else v
 
 
 def plan_amount(plan) -> float:

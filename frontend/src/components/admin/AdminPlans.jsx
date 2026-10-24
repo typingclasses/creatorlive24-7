@@ -73,7 +73,7 @@ export default function AdminPlans() {
       </div>
       <div className="mt-8 grid md:grid-cols-3 gap-6">
         {plans.map((p) => (
-          <div key={p.id} className={p.active ? "" : "opacity-60"}>
+          <div key={p.id} className={`h-full [&>div]:h-full ${p.active ? "" : "opacity-60"}`}>
             <PlanCard plan={p} action={
               <div className="space-y-3">
                 <div className="flex items-center justify-between text-sm"><span>Offer active</span><Switch checked={p.offer_active} onCheckedChange={() => toggleOffer(p)} data-testid={`plan-offer-toggle-${p.id}`} /></div>

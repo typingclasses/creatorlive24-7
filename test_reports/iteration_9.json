@@ -1,0 +1,41 @@
+{
+  "summary": "Tested the admin panel and UPI plans feature on backend and frontend. Backend: new test_admin.py has 15 tests, all pass. The full suite is 61/61 (46 regression tests plus 15 new). Covered: admin auth gating (401/403/200), /api/me fields, public settings and plans (3 seeded), plans CRUD with offers and hidden plans, the user list with Clerk emails, deactivation (403 on PUT destinations, POST videos and POST streams/video, a WebSocket error message, GET still works, reactivation restores access), the self-deactivate 400, plan assign and remove, and the UPI payment flow (pending, duplicate UTR 409, approve, renewal adding duration_days, reject, deciding twice 404, mine list, and status filter). Admin settings PUT also works. UI checks done with Playwright: admin header shows nav-admin, all 5 admin tabs work, the users table (search, active switch, plan select, admin's own switch disabled), the offer toggle opening the edit dialog and showing the badge with ₹149 and ₹199 struck through, adding/editing/hiding/deleting a plan, the Settings save toast and its effect on the landing footer (support, mobile, wa.me link, email, social links, address), landing-pricing showing 3 cards when signed out, and the /plans flow (pay-dialog with a QR SVG and the UPI ID, submit disabled below 6 chars, submit then my-payments shows Pending, duplicate UTR shows an error toast). Admin approve/reject plus filters work, and the user's plan appears in the Users tab. A non-admin opening /admin goes to /dashboard, and a deactivated user sees the deactivated-banner.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "POST /api/payments", "issue": "The UTR min_length=6 check runs BEFORE .strip(). A UTR of 7 spaces is accepted and stored as '' (200), and '     A' is stored as 'A'. Because duplicates are checked against non-rejected payments, a stored '' UTR then gives 409 to any later blank UTR. Fix: strip in a Pydantic validator (or use constr(strip_whitespace=True, min_length=6)). Optionally restrict to alphanumeric."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "Plans.jsx PayDialog", "issue": "The utr state persists after a submission or when the dialog is closed. Reopening any plan's dialog shows the previous UTR prefilled. Reset utr when the plan changes or the dialog closes.", "selector": "[data-testid='utr-input']", "priority": "LOW"}
+    ],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Admin Plans & Offers / Plans page", "issues": ["Plan cards aren't equal height (Pro Yearly with fewer features is shorter). In AdminPlans the wrapper div stops the card stretching, so add h-full."]},
+      {"screen": "Admin Users table", "issues": ["Column widths shift when the 'till <date>' line appears under the plan select. Minor."]}
+    ]
+  },
+  "test_report_links": ["/app/backend/tests/test_admin.py", "/app/backend/tests/test_creatorlive_api.py", "/app/backend/tests/test_chunked_upload.py", "/app/backend/tests/test_play_url.py", "/app/test_reports/pytest/pytest_results.xml"],
+  "action_items": [
+    "Fix UTR validation: strip whitespace before the length check (Pydantic validator) and reject blank UTRs.",
+    "Reset the PayDialog utr state on open/close.",
+    "Optional: equal-height plan cards (h-full) in AdminPlans.",
+    "Remove admin+clerk_test@example.com from ADMIN_EMAILS before production."
+  ],
+  "critical_code_review_comments": [
+    "Deactivating a user calls streamer.stop(uid), which correctly kills live streams. The pytest deactivation test now uses a dedicated user (deact+clerk_test) so it can't kill user_a's streams in the parallel xdist worker.",
+    "require_active is only on the write/stream endpoints. A deactivated user can still DELETE videos and submit payments. That's probably intended, but confirm it.",
+    "list_users calls the Clerk API on every load (a full sync loop over 100-user pages). That's fine for small user counts but slow at scale; consider caching or a sync button.",
+    "get_profile raises an unhandled requests.HTTPError (500) if Clerk lookup fails for a first-time user. A 502/503 with a message would be cleaner (don't fall back to default values).",
+    "The payment duplicate check is find-then-insert with no unique index, so two concurrent submissions of the same UTR can both succeed. Add a partial unique index on utr for non-rejected payments.",
+    "Admin PUT /plans replaces the whole doc. The UI number input turned price 199 into 199.0 (a float). Harmless."
+  ],
+  "updated_files": ["/app/backend/tests/test_admin.py (new)", "/app/memory/test_credentials.md (added admin/deact users)"],
+  "success_rate": {"backend": "100% (61/61); 1 minor validation bug found by extra edge test", "frontend": "100% of tested flows; 1 low UI bug"},
+  "test_credentials": "admin+clerk_test@example.com (admin, via ADMIN_EMAILS), creator+clerk_test@example.com (user), creator2+clerk_test@example.com (user), deact+clerk_test@example.com (user for deactivation tests). Password Test-pass-12345!. UI: python /app/backend/tests/make_ticket.py <email> -> /sign-in?__clerk_ticket=<t> (tickets are single-use).",
+  "seed_data_creation": "Created the Clerk users admin+clerk_test and deact+clerk_test. Cleaned up afterwards: TEST* payments deleted from Mongo, TEST_ plans deleted, Starter offer turned off, creator and deact left ACTIVE with no plan. Site settings reset to address 'Tripoliya, Patna, Bihar' with empty mobile/whatsapp/email/UPI/socials (the original values). The 3 seeded plans are intact.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "test_admin.py runs under xdist loadscope (classes split across 2 workers). Its cleanup fixtures are class-scoped so they don't race. The deactivation test uses deact+clerk_test, not user_a. Signed-in users visiting / are redirected to /dashboard, so check landing-pricing while signed out."
+}
