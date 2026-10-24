@@ -1,0 +1,30 @@
+{
+  "summary": "Frontend-only test of admin text inputs, run with Playwright at 1920 as admin+clerk_test (signed in with a Clerk ticket). Main Page Settings: I tested all 13 fields: site_name, tagline, address, mobile, whatsapp, support_email, support_text textarea, social youtube/facebook/instagram/twitter, upi_id, upi_name. Each one passed select-all+Delete to clear, fast keyboard.type of a multi-character string, Backspace x3, paste via insert_text, jumping to Home and typing in the middle, and Home+Delete. The full value was correct every time. Focus stayed on the same field, and no field had lost focus, reverted, jumped the cursor or failed to clear after a 1s idle. Placeholders show 'e.g. ...' in light italic (rgb(203,213,225)), so empty fields clearly look empty. Save showed a toast and persisted everything after a reload. Social links without a scheme were saved as https://... The footer picked up the new tagline, address, support text, mobile, email, social links and the site_name in the copyright line. Plans & Offers dialog: plan-name, price, duration, the features textarea with Enter newlines, offer switch, offer-price and offer-label all typed correctly. Create showed the card and saved features split into 3 lines in the DB. Edit pre-filled the values and saving the changed name and price persisted. Delete removed the card. Users search (admin-user-search-input) kept focus, filtered to the creator and cleared correctly. No page errors.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Navbar/Footer brand", "issues": ["Logo.jsx hardcodes 'CreatorLive24/7', so a changed site_name only shows in the footer copyright line and not in the navbar or footer logo. Only matters if the admin expects the brand name itself to change."]},
+      {"screen": "Admin Settings placeholders", "issues": ["placeholder:text-slate-300 on white has very low contrast (about 1.5:1). This is intentionally faint, but slate-400 would still be clearly distinct and more readable."]}
+    ]
+  },
+  "test_report_links": [],
+  "action_items": [
+    "Optional: let Logo use settings.site_name (or document that it is fixed).",
+    "Optional: basic validation or hints for the mobile/WhatsApp/email fields. They accept any text, e.g. the WhatsApp link becomes wa.me/<digits extracted>.",
+    "Remove admin+clerk_test@example.com from ADMIN_EMAILS before production."
+  ],
+  "critical_code_review_comments": [
+    "AdminSettings: Field and Section are defined at module scope and inp() is a plain function, not a component, so there is no remount on each keystroke. This is correct.",
+    "AdminSettings: useEffect only seeds f once (when !f), so a background loadSettings() won't overwrite what the user has typed. Good.",
+    "AdminPlans PlanForm: number inputs keep string state and convert with Number() on save. Clearing price gives Number('')=0 and saves 0 silently. Consider validation."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "skipped", "frontend": "100% (13/13 settings fields, 6/6 plan dialog fields, search input, save/persist/footer)"},
+  "test_credentials": "admin+clerk_test@example.com (admin), password Test-pass-12345!. UI ticket: python /app/backend/tests/make_ticket.py <email> -> /sign-in?__clerk_ticket=<t>",
+  "seed_data_creation": "Created and then deleted the TEST_Plan plan (0 TEST plans left). Settings restored and checked in Mongo: site_name CreatorLive24/7, tagline 'Your Content. Always On.', address 'Tripoliya, Patna, Bihar', support_text default, upi_name CreatorLive24/7, all other fields empty.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Clerk tickets are single-use, so generate one per browser session. In Playwright, register the dialog handler with an async def; asyncio isn't defined in the sandbox."
+}

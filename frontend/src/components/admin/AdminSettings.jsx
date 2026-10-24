@@ -23,7 +23,7 @@ export default function AdminSettings() {
   if (!f) return <Loader2 className="w-5 h-5 animate-spin mx-auto" />;
   const set = (k, v) => setF((x) => ({ ...x, [k]: v }));
   const setSocial = (k, v) => setF((x) => ({ ...x, social: { ...x.social, [k]: v } }));
-  const cls = "bg-white text-[#0B132B] placeholder:text-slate-300 placeholder:italic";
+  const cls = "bg-white text-[#0B132B] placeholder:text-slate-400 placeholder:italic";
   const inp = (k, ph) => <Input value={f[k] || ""} placeholder={ph ? `e.g. ${ph}` : ""} className={cls} onChange={(e) => set(k, e.target.value)} data-testid={`settings-${k}-input`} />;
   const fixUrl = (u) => (u && !/^https?:\/\//i.test(u.trim()) ? `https://${u.trim()}` : (u || "").trim());
 
