@@ -1,0 +1,15 @@
+{
+  "summary": "Verified browser tab title change. At first the site still showed 'Emergent | Fullstack App' and the old meta description 'A product of emergent.sh'. Cause: craco.config.js watchOptions ignores '**/public/**', so the dev server kept serving the old index.html even though the file had been edited. After `sudo supervisorctl restart frontend`, document.title is exactly 'creatorlive247.com' on /, /sign-in, /dashboard (after Clerk ticket sign-in), /setup, /library, /plans and after in-app navigation. Meta description is now 'CreatorLive24/7 - Live stream to YouTube & Facebook. Tripoliya, Patna, Bihar.' Landing page renders with no regression.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": ["/app/tests/get_ticket.py"],
+  "action_items": ["Remember: edits to /app/frontend/public/* need `sudo supervisorctl restart frontend`, because craco ignores public/** in watch mode (already restarted this time)"],
+  "critical_code_review_comments": ["index.html still loads https://assets.emergent.sh/scripts/emergent-main.js. It is a platform script, so leave it unless the user asks; it does not change the title."],
+  "updated_files": ["/app/tests/get_ticket.py (helper to mint a Clerk sign-in ticket)"],
+  "success_rate": {"backend": "N/A (skipped)", "frontend": "100%"},
+  "seed_data_creation": "none",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Sign in to the UI with: python /app/tests/get_ticket.py, then open /sign-in?__clerk_ticket=<token>. Edits under public/ need a frontend restart.",
+  "rca of the issue": "Stale title came from the craco dev-server watch setting that ignores public/**, so HtmlWebpackPlugin kept the cached template. Fixed by restarting the frontend; no code change needed."
+}
