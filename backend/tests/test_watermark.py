@@ -52,7 +52,7 @@ def record_stream(setup, name):
     out = f"/tmp/{name}.flv"
     if os.path.exists(out):
         os.remove(out)
-    rec = subprocess.Popen([FF, "-y", "-loglevel", "error", "-listen", "1", "-i", RTMP, "-t", "6", "-c", "copy", out])
+    rec = subprocess.Popen([FF, "-y", "-loglevel", "error", "-listen", "1", "-i", RTMP, "-t", "12", "-c", "copy", out])
     time.sleep(1)
     try:
         r = requests.post(f"{API}/streams/video", headers=h, json={"video_id": setup["vid"], "loop": True, "quality": "720p"})

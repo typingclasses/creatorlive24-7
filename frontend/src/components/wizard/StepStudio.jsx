@@ -74,7 +74,7 @@ export default function StepStudio({ onBack }) {
       </div>
       {showLogo && (
         <p className="mt-3 text-xs text-slate-600 bg-amber-50 border border-amber-200 rounded-lg p-3" data-testid="studio-watermark-note">
-          Free plan: the CreatorLive24/7 logo appears at the top-left of your live stream. <Link to="/plans" className="font-semibold text-[#E50914] underline" data-testid="studio-upgrade-link">Take a paid plan to remove it</Link>
+          Free plan: our logo appears at the top-left of your live stream. <Link to="/plans" className="font-semibold text-[#E50914] underline" data-testid="studio-upgrade-link">Take a paid plan to remove it</Link>
         </p>
       )}
       <div className="mt-4 grid grid-cols-3 gap-3 text-center">
