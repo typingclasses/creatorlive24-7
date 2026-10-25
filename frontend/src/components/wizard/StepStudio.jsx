@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { ArrowLeft, Radio, Square, Loader2, Youtube, Facebook, Film } from "lucide-react";
 import { toast } from "sonner";
 import { useStudio } from "@/context/StudioContext";
-import { useApi, errMsg } from "@/lib/api";
+import { useApi, errMsg, BACKEND_URL } from "@/lib/api";
 import { startBrowserBroadcast } from "@/lib/broadcast";
 import { LiveTimer } from "@/components/wizard/LiveTimer";
 import { Link } from "react-router-dom";
@@ -68,7 +68,7 @@ export default function StepStudio({ onBack }) {
       </div>
       <div className="mt-6 relative aspect-video rounded-2xl overflow-hidden bg-[#0B0F19]">
         <Preview source={source} />
-        {showLogo && <img src="/watermark.png" alt="CreatorLive24/7" data-testid="studio-watermark" className="absolute top-[3%] left-[3%] h-[5.5%] min-h-[14px] pointer-events-none" />}
+        {showLogo && <img src={`${BACKEND_URL}/api/watermark?v=${site?.watermark_version || "0"}`} alt="Logo" data-testid="studio-watermark" className="absolute top-[3%] left-[3%] h-[5.5%] min-h-[14px] pointer-events-none" />}
         {status.live && <span className="absolute bottom-4 left-4 flex items-center gap-1.5 bg-[#E50914] text-white text-xs font-bold px-3 py-1.5 rounded" data-testid="studio-live-badge"><span className="w-2 h-2 bg-white rounded-full live-dot" /> LIVE</span>}
         {status.live && <span className="absolute top-4 right-4 bg-black/60 text-white px-3 py-1.5 rounded"><LiveTimer startedAt={status.started_at} /></span>}
       </div>

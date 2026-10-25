@@ -102,8 +102,8 @@ async def _drain(session: Session):
 
 
 async def start_process(session: Session, input_args, quality, fps, stdin=False, watermark=False):
-    session.watermark = watermark
-    wm_input = ["-i", WATERMARK] if watermark else []
+    session.watermark = bool(watermark)
+    wm_input = ["-i", watermark if isinstance(watermark, str) else WATERMARK] if watermark else []
     args = [FFMPEG, "-hide_banner", "-loglevel", "warning", *input_args, *wm_input,
             *encode_args(quality, fps, watermark),
             "-f", "tee", await build_tee(session)]

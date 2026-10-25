@@ -1,10 +1,10 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
-import { Loader2 } from "lucide-react";
+import { Loader2, Upload, RotateCcw } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
-import { useApi, errMsg } from "@/lib/api";
+import { useApi, errMsg, BACKEND_URL } from "@/lib/api";
 import { useAppData } from "@/context/AppDataContext";
 
 const Field = ({ label, children }) => <label className="grid gap-1 text-xs font-semibold text-slate-500">{label}{children}</label>;
@@ -20,6 +20,8 @@ export default function AdminSettings() {
   const { settings, loadSettings } = useAppData();
   const [f, setF] = useState(null);
   const [busy, setBusy] = useState(false);
+  const [logoBusy, setLogoBusy] = useState(false);
+  const logoInput = useRef(null);
   useEffect(() => { if (settings && !f) setF(settings); }, [settings, f]);
   if (!f) return <Loader2 className="w-5 h-5 animate-spin mx-auto" />;
   const set = (k, v) => setF((x) => ({ ...x, [k]: v }));
@@ -28,6 +30,23 @@ export default function AdminSettings() {
   const inp = (k, ph) => <Input value={f[k] || ""} placeholder={ph ? `e.g. ${ph}` : ""} className={cls} onChange={(e) => set(k, e.target.value)} data-testid={`settings-${k}-input`} />;
   const fixUrl = (u) => (u && !/^https?:\/\//i.test(u.trim()) ? `https://${u.trim()}` : (u || "").trim());
 
+  const uploadLogo = async (file) => {
+    if (!file) return;
+    setLogoBusy(true);
+    try {
+      const fd = new FormData(); fd.append("file", file);
+      await api.post("/admin/watermark", fd);
+      toast.success("New logo uploaded — it will show on free users' next live stream");
+      loadSettings();
+    } catch (e) { toast.error(errMsg(e)); }
+    finally { setLogoBusy(false); logoInput.current.value = ""; }
+  };
+  const resetLogo = async () => {
+    setLogoBusy(true);
+    try { await api.del("/admin/watermark"); toast.success("Default CreatorLive24/7 logo restored"); loadSettings(); }
+    catch (e) { toast.error(errMsg(e)); }
+    finally { setLogoBusy(false); }
+  };
   const toggleLogo = async (v) => {
     set("watermark_enabled", v);
     try { await api.put("/admin/settings", { ...settings, watermark_enabled: v }); toast.success(v ? "Logo will show on free users' streams" : "Logo hidden for everyone"); loadSettings(); }
@@ -50,11 +69,24 @@ export default function AdminSettings() {
       </Section>
       <div className="bg-white border border-slate-200 rounded-3xl p-6 flex flex-wrap items-center gap-6 justify-between" data-testid="settings-watermark-card">
         <div className="flex items-center gap-4">
-          <img src="/watermark.png" alt="logo" className="h-8 border rounded-full" />
+          <div className="h-14 min-w-[120px] px-3 grid place-items-center rounded-xl border bg-[repeating-conic-gradient(#e2e8f0_0%_25%,#fff_0%_50%)] bg-[length:16px_16px]">
+            <img src={`${BACKEND_URL}/api/watermark?v=${settings?.watermark_version || "0"}`} alt="Current logo" data-testid="settings-watermark-preview" className="max-h-10 max-w-[200px] object-contain" />
+          </div>
           <div>
             <h3 className="text-lg font-bold">Logo on free users' live stream</h3>
-            <p className="text-sm text-slate-500">Shown at top-left for users without a paid plan. Paid users never get it.</p>
+            <p className="text-sm text-slate-500">Shown at top-left for users without a paid plan. Paid users never get it. Best: transparent PNG, wide logo.</p>
           </div>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <input ref={logoInput} type="file" accept="image/png,image/jpeg,image/webp" hidden onChange={(e) => uploadLogo(e.target.files[0])} data-testid="settings-watermark-file-input" />
+          <button onClick={() => logoInput.current.click()} disabled={logoBusy} data-testid="settings-watermark-upload-button" className="flex items-center gap-1.5 bg-[#0B132B] hover:bg-[#1D4ED8] disabled:opacity-60 text-white text-xs font-semibold px-4 py-2 rounded-full transition-colors">
+            {logoBusy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Upload className="w-3.5 h-3.5" />} Upload new logo
+          </button>
+          {settings?.watermark_path && (
+            <button onClick={resetLogo} disabled={logoBusy} data-testid="settings-watermark-reset-button" className="flex items-center gap-1.5 bg-slate-100 hover:bg-slate-200 text-xs font-semibold px-4 py-2 rounded-full transition-colors">
+              <RotateCcw className="w-3.5 h-3.5" /> Use default
+            </button>
+          )}
         </div>
         <div className="flex items-center gap-2">
           <span className="text-sm font-semibold">{f.watermark_enabled !== false ? "Showing" : "Hidden"}</span>

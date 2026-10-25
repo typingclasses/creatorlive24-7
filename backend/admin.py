@@ -4,14 +4,21 @@ from datetime import datetime, timedelta, timezone
 from typing import List, Literal, Optional
 
 import requests
-from fastapi import APIRouter, Depends, HTTPException
+import io
+from pathlib import Path
+
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+from fastapi.responses import FileResponse
+from PIL import Image
 from pydantic import BaseModel, Field, field_validator
 from starlette.concurrency import run_in_threadpool
 
 try:
     from backend.clerk_auth import require_user
+    from backend import storage
 except ModuleNotFoundError:
     from clerk_auth import require_user
+    import storage
 
 db = None
 public = APIRouter(prefix="/api")
@@ -92,12 +99,51 @@ async def require_admin(prof=Depends(get_profile)) -> dict:
     return prof
 
 
-async def needs_watermark(user_id: str) -> bool:
+BRAND_DIR = Path("/tmp/creatorlive_branding")
+DEFAULT_WATERMARK = Path(__file__).parent / "assets" / "watermark.png"
+
+
+async def watermark_file() -> Path:
+    """Local path of the current logo (custom upload cached from storage, or the default)."""
+    s = await db.settings.find_one({"key": "site"}) or {}
+    path = s.get("watermark_path")
+    if not path:
+        return DEFAULT_WATERMARK
+    local = BRAND_DIR / path.rsplit("/", 1)[-1]
+    if not local.exists():
+        BRAND_DIR.mkdir(exist_ok=True)
+        try:
+            await run_in_threadpool(storage.download_to_file, path, str(local))
+        except Exception:
+            return DEFAULT_WATERMARK
+    return local
+
+
+async def needs_watermark(user_id: str) -> Optional[str]:
     """Free users (no valid plan) get the logo on their live stream, unless admin turned it off."""
     s = await db.settings.find_one({"key": "site"}) or {}
     if not s.get("watermark_enabled", True):
-        return False
-    return not _plan_valid(await db.users.find_one({"user_id": user_id}) or {})
+        return None
+    if _plan_valid(await db.users.find_one({"user_id": user_id}) or {}):
+        return None
+    return str(await watermark_file())
+
+
+@public.get("/watermark")
+async def get_watermark():
+    return FileResponse(await watermark_file(), media_type="image/png", headers={"Cache-Control": "public, max-age=300"})
+
+
+def _normalize_logo(data: bytes) -> bytes:
+    img = Image.open(io.BytesIO(data))
+    img = img.convert("RGBA")
+    if img.height > 240:
+        img = img.resize((round(img.width * 240 / img.height), 240), Image.LANCZOS)
+    if img.width > 1200:
+        img = img.resize((1200, round(img.height * 1200 / img.width)), Image.LANCZOS)
+    out = io.BytesIO()
+    img.save(out, "PNG")
+    return out.getvalue()
 
 
 def _plan_valid(prof):
@@ -209,6 +255,33 @@ async def stats(_=Depends(require_admin)):
 async def save_settings(body: SettingsIn, _=Depends(require_admin)):
     await db.settings.update_one({"key": "site"}, {"$set": body.model_dump()}, upsert=True)
     return body.model_dump()
+
+
+@admin.post("/watermark")
+async def upload_watermark(file: UploadFile = File(...), _=Depends(require_admin)):
+    if file.content_type not in ("image/png", "image/jpeg", "image/webp"):
+        raise HTTPException(400, "Upload a PNG, JPG or WEBP image")
+    data = await file.read()
+    if len(data) > 5 * 1024 * 1024:
+        raise HTTPException(413, "Logo must be under 5 MB")
+    try:
+        png = await run_in_threadpool(_normalize_logo, data)
+    except Exception:
+        raise HTTPException(400, "This image could not be read")
+    path = f"{storage.APP_NAME}/branding/watermark-{uuid.uuid4().hex}.png"
+    result = await run_in_threadpool(storage.put_object, path, png, "image/png")
+    BRAND_DIR.mkdir(exist_ok=True)
+    (BRAND_DIR / result["path"].rsplit("/", 1)[-1]).write_bytes(png)
+    version = uuid.uuid4().hex[:8]
+    await db.settings.update_one({"key": "site"}, {"$set": {"watermark_path": result["path"], "watermark_version": version}})
+    return {"watermark_version": version, "custom": True}
+
+
+@admin.delete("/watermark")
+async def reset_watermark(_=Depends(require_admin)):
+    version = uuid.uuid4().hex[:8]
+    await db.settings.update_one({"key": "site"}, {"$set": {"watermark_path": None, "watermark_version": version}})
+    return {"watermark_version": version, "custom": False}
 
 
 @admin.get("/plans")
