@@ -1,0 +1,18 @@
+{
+  "summary": "The preview app has no 404s. curl hard loads of /, /sign-in, /sign-up, /dashboard, /setup, /setup?step=2, /library, /plans, /admin and /xyz all returned HTTP 200. /api/settings and /api/plans returned 200. Playwright test signed out: protected routes redirect to /sign-in and /xyz redirects to /. Playwright test signed in with a Clerk ticket (creator+clerk_test): /dashboard, /setup, /setup?step=2, /setup?step=3, /library and /plans all render, and reloading each one keeps the page and the session, with no blank page and no 404. /admin sends a non-admin user to /dashboard, which is the expected role guard. /xyz and / go to /dashboard. Custom domain (informational): https://creatorlive247.com and https://www.creatorlive247.com return HTTP 404 'This Page Does Not Exist'. The response headers are 'platform: hostinger', 'panel: hpanel', 'server: hcdn', so this is HOSTINGER's default page, not Emergent's. http:// sends a 301 to https://. DNS: nameservers are artemis/hermes.dns-parking.com (Hostinger). The A records are Hostinger IPs (191.101.104.221, 212.1.212.191, and from local resolve 145.223.124.126, 88.223.87.209). www is a CNAME to www.creatorlive247.com.cdn.hstgr.net. The domain does not point to the Emergent deployment at all.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": ["/app/tests/get_ticket.py"],
+  "action_items": [
+    "No app code fix needed. The user's 404 comes from the creatorlive247.com DNS, which points to Hostinger's hosting/CDN (hcdn, Hostinger default 404 page).",
+    "Tell the user to, in the Hostinger hPanel: (1) remove the domain from Hostinger Website hosting / turn off the Hostinger CDN for it; (2) in DNS Zone, delete the existing A records for @ and the www CNAME (cdn.hstgr.net); (3) add the exact A/CNAME records that Emergent shows under Deploy > Custom Domain; (4) wait for propagation, then verify in Emergent. The preview URL works fine in the meantime."
+  ],
+  "critical_code_review_comments": [],
+  "updated_files": [],
+  "success_rate": {"backend": "N/A (skipped; 2 API smoke checks returned 200)", "frontend": "100%"},
+  "seed_data_creation": "none",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Sign in with: python /app/tests/get_ticket.py, then open /sign-in?__clerk_ticket=<token>. creatorlive247.com is served by Hostinger (headers platform: hostinger, server: hcdn), not by Emergent.",
+  "rca of the issue": "The user's 404 'This Page Does Not Exist' is served by Hostinger: the creatorlive247.com DNS A records and the www CNAME point at Hostinger's CDN/hosting, which has no site deployed. Fix: change the DNS records in Hostinger to the Emergent custom-domain values and remove the Hostinger website/CDN binding."
+}
