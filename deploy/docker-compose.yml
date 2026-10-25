@@ -1,0 +1,37 @@
+services:
+  mongo:
+    image: mongo:7
+    restart: always
+    volumes:
+      - mongo_data:/data/db
+
+  backend:
+    build:
+      context: ..
+      dockerfile: deploy/backend.Dockerfile
+    restart: always
+    env_file: .env
+    environment:
+      MONGO_URL: mongodb://mongo:27017
+    volumes:
+      - video_cache:/tmp/creatorlive_videos
+      - brand_cache:/tmp/creatorlive_branding
+    depends_on:
+      - mongo
+
+  frontend:
+    build:
+      context: ..
+      dockerfile: deploy/frontend.Dockerfile
+      args:
+        REACT_APP_BACKEND_URL: ${SITE_URL}
+    restart: always
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+
+volumes:
+  mongo_data:
+  video_cache:
+  brand_cache:
