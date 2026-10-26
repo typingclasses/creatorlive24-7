@@ -68,7 +68,7 @@ export default function ClerkAuthProvider({ children }) {
     >
       <ClerkFailed>
         <div data-testid="auth-failed" style={{ background: "#FEF2F2", color: "#B91C1C", padding: "10px 16px", textAlign: "center", fontSize: 14 }}>
-          Login service load nahi hua. <button onClick={() => window.location.reload()} style={{ textDecoration: "underline", fontWeight: 600 }}>Page reload karein</button>
+          Login service load nahi hua. <button data-testid="auth-failed-reload-button" onClick={() => window.location.reload()} style={{ textDecoration: "underline", fontWeight: 600 }}>Page reload karein</button>
         </div>
       </ClerkFailed>
       {children}
