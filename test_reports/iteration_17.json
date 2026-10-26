@@ -1,0 +1,26 @@
+{
+  "summary": "Ran frontend-only tests on the preview for the Home/Landing fix. All requested checks passed. (1) With clerk-js blocked (*clerk.browser.js*, *.clerk.accounts.dev/**), the auth-failed banner shows and the landing renders fully: one hero, one pricing block, and the h1 'Go Live Faster...'. (2) With clerk-js delayed 5s, sampled every second for 10s: exactly one hero every time, no duplicate, no connecting or failed state, and the header ends on 'Sign in with Google'. (3) A Clerk-ticket user lands on /dashboard, and opening / redirects to /dashboard with no landing hero in any sample. (4) Regression: blocking /api/clerk/config shows the Retry notice; Retry recovers to the landing with no page reload. A clean load has zero console errors.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Header when clerk-js has failed", "issues": ["The header shows only the logo and no Sign-in button. This is expected because Header uses <Show>. The banner offers a reload, so this is minor and acceptable."]}
+    ]
+  },
+  "test_report_links": ["/app/backend/tests/make_ticket.py"],
+  "action_items": [
+    "Optional: in the failed state, the hero CTA 'Start streaming with Google' cannot work. Consider disabling it or pointing it to reload.",
+    "Proceed with the production redeploy, then check that www.creatorlive247.com redirects to the apex domain and that the old assets.creatorlive247.sh and PostHog scripts are gone."
+  ],
+  "critical_code_review_comments": [
+    "Home: ClerkLoading, ClerkFailed and Show signed-out are mutually exclusive, so only one Landing is ever mounted. Landing remounts once at the loading-to-loaded switch, which is harmless.",
+    "The ERR_FAILED console entries in the retry test come only from the config requests the test deliberately blocked."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "skipped", "frontend": "100%"},
+  "seed_data_creation": "None. Used creator+clerk_test@example.com through a sign-in ticket.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Get a ticket with: python /app/backend/tests/make_ticket.py <email>, then open /sign-in?__clerk_ticket=<t>. When clerk-js is blocked, hide [data-emergent-overlay-host] with CSS before clicking. Landing testids: hero-get-started-button, landing-pricing. Next step is checking production after the redeploy."
+}
