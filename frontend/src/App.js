@@ -1,6 +1,6 @@
 import "@/App.css";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
-import { Show, SignIn, SignUp } from "@clerk/react";
+import { Show, SignIn, SignUp, ClerkLoading, ClerkFailed } from "@clerk/react";
 import ClerkAuthProvider from "@/components/auth/ClerkAuthProvider";
 import { StudioProvider } from "@/context/StudioContext";
 import { AppDataProvider } from "@/context/AppDataContext";
@@ -29,6 +29,8 @@ const Home = () => (
   <>
     <Show when="signed-in"><Navigate to="/dashboard" replace /></Show>
     <Show when="signed-out"><Landing /></Show>
+    <ClerkLoading><Landing /></ClerkLoading>
+    <ClerkFailed><Landing /></ClerkFailed>
   </>
 );
 

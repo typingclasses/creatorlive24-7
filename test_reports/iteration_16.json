@@ -1,0 +1,29 @@
+{
+  "summary": "Ran browser tests on the preview for the reliability and auth fixes. Passed: clean served HTML, landing renders with no console errors, www->apex logic (keeps path, query and hash; apex is not redirected), config-endpoint blocking with slow notice, Retry and recovery without a page reload, auth-failed banner and reload button, ticket sign-in to /dashboard (stays signed in after refresh, getToken works), and plans/admin routes behave as before. One UX gap: when clerk-js fails, the landing page's main content is empty (only the banner, header and footer show). Production still serves the OLD build: the dead assets.creatorlive247.sh script (its DNS lookup fails), PostHog, and no www redirect. It needs a redeploy.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [
+      {"component": "App.js Home route", "issue": "When clerk-js fails to load, <Show when='signed-out'><Landing/></Show> never renders, so the landing main area is empty (only the auth-failed banner, header and footer show) and the header has no Sign-in button. Not a blank page, but the site does not 'always open' its content.", "selector": "[data-testid='auth-failed']", "priority": "MEDIUM"}
+    ],
+    "integration_issues": [
+      {"flow": "Production deploy", "issue": "https://creatorlive247.com and www still serve the old build (main.81e93fec.js). That build still has the synchronous <script src='https://assets.creatorlive247.sh/scripts/creatorlive-main.js'> (the DNS lookup fails, curl exit 6) and the PostHog snippet, and has no www->apex redirect script. www.creatorlive247.com/plans returns 200 with no redirect.", "affected_selectors": []}
+    ],
+    "design_issues": []
+  },
+  "test_report_links": ["/app/backend/tests/make_ticket.py"],
+  "action_items": [
+    "Redeploy to production so creatorlive247.com picks up the new index.html: dead script removed, PostHog removed, www redirect added. Then re-check www.creatorlive247.com and confirm it redirects to the apex domain.",
+    "In App.js Home, also render Landing when Clerk fails, e.g. add <ClerkFailed><Landing/></ClerkFailed> (and consider doing the same in the Header), so visitors still see the content when clerk-js is blocked."
+  ],
+  "critical_code_review_comments": [
+    "ClerkAuthProvider retry logic is correct: the cancelled flag stops stale timers and stale fetches after Retry, and the backoff is capped at 5s.",
+    "Private routes show nothing when Clerk fails (only the banner). This is acceptable but could show a friendly message.",
+    "On the preview, the only matches for posthog/emergent.sh in the served HTML are comments inside the platform-injected Emergent overlay script, not app scripts."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "skipped", "frontend": "90%"},
+  "seed_data_creation": "None. Used the existing creator+clerk_test@example.com account through a sign-in ticket.",
+  "retest_needed": false,
+  "should_main_agent_self_test": true,
+  "context_for_next_testing_agent": "Production checks: /api/clerk/config returns enabled true, pk_live and proxy_url /api/__clerk. /api/__clerk/v1/environment returns 200. www returns 200 (old build, no redirect). On the preview, the Emergent error overlay (data-emergent-overlay-host) intercepts clicks when clerk-js is blocked; hide it with CSS in tests. Get a ticket with: python /app/backend/tests/make_ticket.py <email>."
+}
